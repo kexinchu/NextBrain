@@ -1,7 +1,30 @@
 """DeepResearcher: annotated bib with metadata, related_work_draft, baselines, gap summary."""
 import json
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import List, Tuple
 
 from tools.search import search as web_search
+
+
+def _parallel_search(queries: List[Tuple[str, int, str]], max_workers: int = 4) -> list:
+    """Run multiple (query, max_results, source) searches in parallel and return deduplicated results."""
+    all_results = []
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = [executor.submit(web_search, q, n, source) for q, n, source in queries]
+        for future in as_completed(futures):
+            try:
+                all_results.extend(future.result())
+            except Exception:
+                pass
+    # Deduplicate by URL or title
+    seen: set = set()
+    unique: list = []
+    for r in all_results:
+        key = r.get("url") or r.get("title") or ""
+        if key and key not in seen:
+            seen.add(key)
+            unique.append(r)
+    return unique
 
 
 def _load_prompt() -> str:
@@ -20,29 +43,25 @@ def run(input_data: dict) -> dict:
     contribution_statement = input_data.get("contribution_statement") or ""
     extra_queries: list = input_data.get("extra_queries") or []
 
-    web_results: list = []
+    # Build parallel search batch: (query, max_results, source)
+    queries: List[Tuple[str, int, str]] = []
     for h in hypotheses:
-        claim = (h.get("claim") or "")[:80]
+        claim = (h.get("claim") or "")[:100]
         if claim:
-            web_results.extend(web_search(claim, max_results=4, source="arxiv"))
-            web_results.extend(web_search(claim, max_results=2, source="ss"))
+            queries.append((claim, 5, "arxiv"))
+            queries.append((claim, 3, "ss"))
     if related_work:
         topic_ctx = " ".join(r.get("paper", "") for r in related_work[:3])[:100]
         if topic_ctx:
-            web_results.extend(web_search(topic_ctx, max_results=3, source="arxiv"))
+            queries.append((topic_ctx, 5, "arxiv"))
     # Targeted re-search pass (Skeptic rejection_risks or gate failures)
-    for q in extra_queries[:4]:
-        q_short = str(q)[:80]
+    for q in extra_queries[:6]:
+        q_short = str(q)[:100]
         if q_short:
-            web_results.extend(web_search(q_short, max_results=3, source="arxiv"))
+            queries.append((q_short, 4, "arxiv"))
+            queries.append((q_short, 3, "ss"))
 
-    seen: set = set()
-    unique: list = []
-    for r in web_results:
-        key = r.get("url") or r.get("title") or ""
-        if key and key not in seen:
-            seen.add(key)
-            unique.append(r)
+    unique = _parallel_search(queries, max_workers=6)
 
     search_block = json.dumps(
         [{"title": r.get("title", ""), "snippet": r.get("snippet", ""), "url": r.get("url", "")} for r in unique],

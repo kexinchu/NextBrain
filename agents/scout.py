@@ -55,6 +55,8 @@ def run(input_data: dict) -> dict:
     raw = call_llm(system, user, json_mode=True)
     try:
         out = json.loads(raw)
+        if not isinstance(out, dict):
+            out = {}
     except json.JSONDecodeError:
         out = {}
     related_work = out.get("related_work") or []

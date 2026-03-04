@@ -27,7 +27,7 @@ if str(_REPO_ROOT) not in sys.path:
 
 from orchestrator.state import create_initial_state, get_selected_hypotheses
 from tools.io import ensure_artifacts_dirs, save_json
-from tools.latex_builder import build_latex, inject_result_tables
+from tools.latex_builder import build_latex, inject_result_tables, compile_pdf
 from tools.citations import save_citations_to_bib
 
 # ── tuneable caps ─────────────────────────────────────────────
@@ -227,13 +227,16 @@ def _classify_gate_failures(gate_reasons: List[str]) -> Tuple[bool, bool, bool]:
     """
     Returns (needs_research, needs_experiments, needs_rewrite).
     - needs_research   : baseline / citation coverage issues → re-run DeepResearcher (+Skeptic)
-    - needs_experiments: EVID coverage issues → re-run Experimenter
-    - needs_rewrite    : speculation / skeptic_items issues → re-run Writer with fix_list only
+    - needs_experiments: [EVID:] coverage gap in results/experiments → re-run Experimenter
+    - needs_rewrite    : missing tags / speculation / skeptic_items → re-run Writer with fix_list
     """
     joined = " ".join(gate_reasons).lower()
-    needs_research    = "baseline" in joined or "citation_coverage" in joined
-    needs_experiments = "evid" in joined or "experiment" in joined
-    needs_rewrite     = "speculation" in joined or "skeptic_items" in joined
+    # "no [cite:" or "no [evid:" → Writer didn't use tags at all → rewrite with explicit instructions
+    missing_tags = "no [cite:" in joined or "no [evid:" in joined or "no [spec]" in joined
+    needs_research    = ("baseline" in joined or "citation_coverage" in joined) and not missing_tags
+    # Only trigger Experimenter re-run when EVID *coverage* is low (not when tags are entirely absent)
+    needs_experiments = ("evid" in joined or "experiment" in joined) and not missing_tags
+    needs_rewrite     = "speculation" in joined or "skeptic_items" in joined or missing_tags
     return needs_research, needs_experiments, needs_rewrite
 
 
@@ -323,7 +326,19 @@ def run_pipeline(
         )
         _log(f"  ↩  {event}")
         state["loop_log"].append(event)
-        state["fix_list"] = gate_reasons
+        # If tags are entirely absent, give Writer a concrete action instruction
+        joined_reasons = " ".join(gate_reasons).lower()
+        if "no [cite:" in joined_reasons or "no [evid:" in joined_reasons:
+            bib = (state["deep_research_output"] or {}).get("annotated_bib") or []
+            bib_keys_hint = ", ".join(b.get("key", "") for b in bib[:6] if b.get("key"))
+            state["fix_list"] = [
+                f"CRITICAL: You MUST use [CITE:key] tags in every paragraph of the intro and related_work "
+                f"sections. Available bib keys: {bib_keys_hint}. "
+                "Example: 'Prior work [CITE:moe2024] showed X, but lacks Y.' "
+                "Do NOT write prose without citation tags — the gating system will reject your output."
+            ] + gate_reasons
+        else:
+            state["fix_list"] = gate_reasons
 
         if needs_research:
             _log("     → Re-running DeepResearcher (citation / baseline gap) …")
@@ -423,6 +438,15 @@ def run_pipeline(
     # Rebuild final LaTeX from editor output
     final_sections = (state["editor_output"] or {}).get("sections") or sections
     _build_latex_artifacts(state, dirs, sections=final_sections)
+
+    # Compile PDF (ACM sigconf double-column)
+    _log("Compiling PDF (pdflatex × 4) …")
+    pdf_path = compile_pdf(dirs["paper"])
+    if pdf_path:
+        _log(f"  ✓ PDF ready: {pdf_path}")
+    else:
+        _log("  ⚠  PDF compilation failed — see artifacts/paper/*.log for details.")
+
     _log("Done. Artifacts written.")
 
     return state
@@ -453,6 +477,8 @@ def main() -> None:
     print("  EfficientResearch pipeline complete")
     print("══════════════════════════════════════════")
     print(f"  Paper (LaTeX) : {dirs['paper'] / 'main.tex'}")
+    pdf = dirs["paper"] / "main.pdf"
+    print(f"  Paper (PDF)   : {pdf}" + (" ✓" if pdf.exists() else " (compilation failed)"))
     print(f"  References    : {dirs['paper'] / 'references.bib'}")
     print(f"  Run logs      : {dirs['runs']}")
     print(f"  Gate results  : {json.dumps(state.get('gate_results', {}), indent=4)}")

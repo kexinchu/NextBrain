@@ -36,14 +36,14 @@ def _get_ddgs_impl():
             "url": (r.get("href") or r.get("link") or "").strip(),
         }
 
+    # Try the new `ddgs` package first (successor to duckduckgo_search)
     try:
-        from duckduckgo_search import DDGS
+        from ddgs import DDGS
 
         def _search(query: str, max_results: int = 10) -> List[Dict[str, str]]:
             out: List[Dict[str, str]] = []
             try:
-                ddgs = DDGS()
-                for r in ddgs.text(query, max_results=max_results):
+                for r in DDGS().text(query, max_results=max_results):
                     out.append(_norm(r))
             except Exception as e:
                 out.append({"title": f"[Search error: {e}]", "snippet": "", "url": ""})
@@ -54,13 +54,15 @@ def _get_ddgs_impl():
     except ImportError:
         pass
 
+    # Fallback: legacy duckduckgo_search package
     try:
-        from ddgs import DDGS
+        from duckduckgo_search import DDGS  # type: ignore
 
         def _search2(query: str, max_results: int = 10) -> List[Dict[str, str]]:
             out = []
             try:
-                for r in DDGS().text(query, max_results=max_results):
+                ddgs = DDGS()
+                for r in ddgs.text(query, max_results=max_results):
                     out.append(_norm(r))
             except Exception as e:
                 out.append({"title": f"[Search error: {e}]", "snippet": "", "url": ""})
@@ -122,13 +124,18 @@ def _search_arxiv(query: str, max_results: int = 5) -> List[Dict[str, str]]:
 # ──────────────────────────────────────────────
 
 def _search_semantic_scholar(query: str, max_results: int = 5) -> List[Dict[str, str]]:
+    import os
     clean_query = _sanitize_query(query)
     encoded = urllib.parse.quote(clean_query)
     url = (
         f"https://api.semanticscholar.org/graph/v1/paper/search"
         f"?query={encoded}&limit={max_results}&fields=title,abstract,year,externalIds"
     )
-    req = urllib.request.Request(url, headers={"User-Agent": "EfficientResearch/1.0"})
+    headers = {"User-Agent": "EfficientResearch/1.0"}
+    ss_key = os.environ.get("SS_API_KEY") or os.environ.get("SEMANTIC_SCHOLAR_API_KEY")
+    if ss_key:
+        headers["x-api-key"] = ss_key
+    req = urllib.request.Request(url, headers=headers)
     # Retry with exponential backoff on 429 (rate-limit) responses
     for attempt in range(4):
         try:
