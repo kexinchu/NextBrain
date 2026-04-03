@@ -3,9 +3,9 @@ requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "researchbot"
-version = "0.2.0"
-description = "Research assistant toolkit: paper management, idea exploration, experiment design, and note organization"
+name = "researchnote"
+version = "0.3.0"
+description = "ResearchNote: paper reading notes with LLM — fetch metadata, generate structured notes, manage in Obsidian"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
@@ -13,22 +13,22 @@ dependencies = [
     "openai>=1.0.0",
     "pydantic>=2.0",
     "pyyaml>=6.0",
-    "duckduckgo-search>=6.0.0",
     "arxiv>=2.1.0",
     "pyzotero>=1.5.0",
+    "pymupdf>=1.24.0",
 ]
 
 [project.optional-dependencies]
 browser = ["playwright>=1.40.0"]
 rag = ["chromadb>=0.4.0", "sentence-transformers>=2.2.0"]
-all = ["researchbot[browser,rag]"]
+all = ["researchnote[browser,rag]"]
 dev = ["pytest", "ruff"]
 
 [project.scripts]
-researchbot = "researchbot.cli:main"
+researchnote = "researchnote.cli:main"
 
 [tool.setuptools.packages.find]
-include = ["researchbot*"]
+include = ["researchnote*"]
 
 [tool.setuptools.package-data]
-"researchbot.skills" = ["**/*.md"]
+"researchnote.skills" = ["**/*.md"]

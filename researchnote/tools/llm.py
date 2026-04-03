@@ -47,7 +47,7 @@ def _cache_set(key: str, response: str) -> None:
 
 def get_client():
     from openai import OpenAI
-    from researchbot.config import get_openai_api_key, get_openai_base_url
+    from researchnote.config import get_openai_api_key, get_openai_base_url
     kwargs = {"api_key": get_openai_api_key() or "sk-placeholder"}
     base_url = get_openai_base_url()
     if base_url:
@@ -56,7 +56,7 @@ def get_client():
 
 
 def get_model() -> str:
-    from researchbot.config import get_model as _get_model
+    from researchnote.config import get_model as _get_model
     return _get_model()
 
 
@@ -313,7 +313,7 @@ def _is_valid_json(text: str) -> bool:
 
 def _is_browser_mode() -> bool:
     """Auto-detect: use browser if explicitly set OR if no API key is configured."""
-    from researchbot import config
+    from researchnote import config
     if config.USE_BROWSER_LLM:
         return True
     # No API key → fallback to browser
@@ -335,7 +335,7 @@ def call_llm(
     - Optional disk cache (set EFFICIENT_RESEARCH_CACHE_DIR to enable)
     """
     if _is_browser_mode():
-        from researchbot.tools.browser_llm import call_llm_browser
+        from researchnote.tools.browser_llm import call_llm_browser
         return call_llm_browser(system, user, json_mode=json_mode, max_tokens=max_tokens)
 
     model = model or get_model()

@@ -1,4 +1,4 @@
-"""Data models for ResearchBot."""
+"""Data models for ResearchNote."""
 from datetime import datetime
 from typing import List, Optional
 
@@ -45,8 +45,9 @@ class PaperNote(BaseModel):
     key_results: str = ""
     summary: str = ""
     limitations: str = ""
-    insights: str = ""
-    personal_notes: str = ""
+
+    # Figure placement: {section_name: [fig_id, ...]}
+    figure_placement: dict = Field(default_factory=dict)
 
 
 class IdeaNote(BaseModel):

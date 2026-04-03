@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 # Reuse JSON extractor from llm.py
-from researchbot.tools.llm import _extract_json
+from researchnote.tools.llm import _extract_json
 
 # ── configuration ─────────────────────────────────────────────────────────────
 CHATGPT_URL = os.environ.get("CHATGPT_URL", "https://chatgpt.com/")
@@ -606,7 +606,7 @@ def call_llm_browser(
     """
     # ── Try daemon first (persistent browser across CLI invocations) ─────
     try:
-        from researchbot.tools.browser_daemon import ensure_daemon_running, daemon_chat
+        from researchnote.tools.browser_daemon import ensure_daemon_running, daemon_chat
         ensure_daemon_running()
         return daemon_chat(
             system=system, user=user, json_mode=json_mode,

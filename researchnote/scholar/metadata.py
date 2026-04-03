@@ -5,8 +5,8 @@ import urllib.parse
 import urllib.request
 from typing import Optional
 
-from researchbot.models import PaperMetadata
-from researchbot.scholar.url_parser import parse_paper_url, arxiv_id_to_pdf_url, arxiv_id_to_abs_url
+from researchnote.models import PaperMetadata
+from researchnote.scholar.url_parser import parse_paper_url, arxiv_id_to_pdf_url, arxiv_id_to_abs_url
 
 
 def fetch_metadata(url: str) -> PaperMetadata:
@@ -86,7 +86,7 @@ def _fetch_semantic_scholar_by_url(url: str) -> Optional[PaperMetadata]:
 def _fetch_s2(api_url: str) -> Optional[PaperMetadata]:
     """Generic Semantic Scholar fetch."""
     import os
-    headers = {"User-Agent": "ResearchBot/1.0"}
+    headers = {"User-Agent": "ResearchNote/1.0"}
     ss_key = os.environ.get("SS_API_KEY") or os.environ.get("SEMANTIC_SCHOLAR_API_KEY")
     if ss_key:
         headers["x-api-key"] = ss_key

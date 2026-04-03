@@ -58,7 +58,7 @@ def retrieve_context(
 def _retrieve_from_rag(topic: str, max_results: int = 15) -> List[Dict[str, Any]]:
     """Semantic search via ChromaDB."""
     try:
-        from researchbot.tools.rag import query
+        from researchnote.tools.rag import query
         results = query(topic, k=max_results)
         return [
             {
@@ -78,7 +78,7 @@ def _retrieve_from_zotero(topic: str, max_results: int = 5) -> List[Dict[str, An
     """Keyword search in Zotero library."""
     try:
         from pyzotero import zotero
-        from researchbot.config import get_zotero_library_id, get_zotero_api_key, get_zotero_library_type
+        from researchnote.config import get_zotero_library_id, get_zotero_api_key, get_zotero_library_type
 
         lib_id = get_zotero_library_id()
         api_key = get_zotero_api_key()
@@ -129,7 +129,7 @@ def _retrieve_from_obsidian(
     include_ideas: bool = True,
 ) -> List[Dict[str, Any]]:
     """Direct file scan of Obsidian vault (fallback when RAG is unavailable)."""
-    from researchbot.config import get_obsidian_vault_path
+    from researchnote.config import get_obsidian_vault_path
 
     vault = Path(get_obsidian_vault_path())
     if not vault.exists():

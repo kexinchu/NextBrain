@@ -1,10 +1,10 @@
-# ResearchBot Configuration
+# ResearchNote Configuration
 # Copy this file to config.yaml and fill in your values:
 #   cp config.yaml.example config.yaml
 #
 # Place config.yaml at:
 #   ./config.yaml            (project-local, takes priority)
-#   ~/.researchbot/config.yaml  (global, shared across projects)
+#   ~/.researchnote/config.yaml  (global, shared across projects)
 #
 # All fields can also be set via environment variables (env vars take precedence over config.yaml)
 
@@ -19,16 +19,16 @@
 llm:
   api_key: ""                        # Your API key (env: OPENAI_API_KEY)
   base_url: ""                       # Custom endpoint, empty = OpenAI default (env: OPENAI_BASE_URL)
-  model: "gpt-4o-mini"              # Model name (env: RESEARCHBOT_MODEL)
+  model: "gpt-4o-mini"              # Model name (env: RESEARCHNOTE_MODEL)
 
 # ── Zotero ───────────────────────────────────────────────────────────────────
 # Optional but recommended. Stores papers with PDF attachments.
-# If not configured, `researchbot record` still works — it just skips Zotero.
+# If not configured, `researchnote record` still works — it just skips Zotero.
 #
 # How to get your API key and library ID:
 #   1. Go to https://www.zotero.org/settings/keys
 #   2. Click "Create new private key"
-#      - Name: "ResearchBot" (or anything you like)
+#      - Name: "ResearchNote" (or anything you like)
 #      - Check "Allow library access" → "Read/Write"
 #      - Check "Allow write access"
 #      - Save → copy the key string
@@ -43,7 +43,7 @@ zotero:
 # ── Obsidian ─────────────────────────────────────────────────────────────────
 # Required: path to your Obsidian vault folder.
 #
-# ResearchBot auto-creates this structure inside your vault:
+# ResearchNote auto-creates this structure inside your vault:
 #   Papers-<paper_type>/  — paper reading notes (e.g. Papers-ANNS, Papers-RAG)
 #   Idea/                 — research ideas
 #   Explore/              — exploration reports
@@ -53,19 +53,19 @@ zotero:
 #   - The path is shown next to your vault name
 #   - Or simply find it in Finder / File Explorer — it's a regular folder
 obsidian:
-  vault_path: "~/ObsidianVault"      # Absolute path to your vault (env: RESEARCHBOT_OBSIDIAN_VAULT)
+  vault_path: "~/ObsidianVault"      # Absolute path to your vault (env: RESEARCHNOTE_OBSIDIAN_VAULT)
 
 # ── RAG ──────────────────────────────────────────────────────────────────────
 # Optional. Enables semantic search across your notes during explore/experiment.
 #
 # Setup:
-#   1. pip install researchbot[rag]
-#   2. researchbot index              (build vector index from your vault)
+#   1. pip install researchnote[rag]
+#   2. researchnote index              (build vector index from your vault)
 #
 # After initial indexing, new notes are automatically indexed when created via record/note.
 rag:
-  dir: "~/.researchbot/rag"          # ChromaDB storage path (env: RESEARCHBOT_RAG_DIR)
-  embedding_model: "all-MiniLM-L6-v2"  # sentence-transformers model (env: RESEARCHBOT_RAG_EMBEDDING_MODEL)
+  dir: "~/.researchnote/rag"          # ChromaDB storage path (env: RESEARCHNOTE_RAG_DIR)
+  embedding_model: "all-MiniLM-L6-v2"  # sentence-transformers model (env: RESEARCHNOTE_RAG_EMBEDDING_MODEL)
   hf_token: ""                        # HuggingFace token for gated model downloads (env: HF_TOKEN)
                                        # Get at: https://huggingface.co/settings/tokens
 
