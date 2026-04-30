@@ -2,7 +2,7 @@
 import json
 from typing import Dict, List, Optional
 
-from researchnote.models import PaperMetadata, PaperNote, IdeaNote
+from nextbrain.models import PaperMetadata, PaperNote, IdeaNote
 
 _LANG_INSTRUCTION = {
     "zh": "\n\nIMPORTANT: Write ALL field values in Chinese (中文). Keep JSON keys in English. "
@@ -13,7 +13,7 @@ _LANG_INSTRUCTION = {
 
 
 def _get_lang_suffix() -> str:
-    from researchnote.config import get_output_language
+    from nextbrain.config import get_output_language
     lang = get_output_language()
     return _LANG_INSTRUCTION.get(lang, "")
 
@@ -29,8 +29,8 @@ def generate_paper_note(
         figure_captions: Optional list of {"id": "fig1", "page": 3, "caption": "Figure 1: ..."}
             If provided, the LLM will decide which figures to place in which sections.
     """
-    from researchnote.tools.llm import call_llm
-    from researchnote.tools.skills_loader import get_skill_prompt
+    from nextbrain.tools.llm import call_llm
+    from nextbrain.tools.skills_loader import get_skill_prompt
 
     system = get_skill_prompt("scholar") + _get_lang_suffix()
 
@@ -93,7 +93,7 @@ def generate_paper_note(
 
 def generate_idea_note(raw_text: str) -> IdeaNote:
     """Generate a structured idea note from free-form text."""
-    from researchnote.tools.llm import call_llm
+    from nextbrain.tools.llm import call_llm
 
     lang_suffix = _get_lang_suffix()
     system = f"""You are a senior systems/ML researcher. Given a raw research idea or thought, structure it into a clear research idea note.

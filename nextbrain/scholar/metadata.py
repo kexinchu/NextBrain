@@ -5,8 +5,8 @@ import urllib.parse
 import urllib.request
 from typing import Optional
 
-from researchnote.models import PaperMetadata
-from researchnote.scholar.url_parser import parse_paper_url, arxiv_id_to_pdf_url, arxiv_id_to_abs_url
+from nextbrain.models import PaperMetadata
+from nextbrain.scholar.url_parser import parse_paper_url, arxiv_id_to_pdf_url, arxiv_id_to_abs_url
 
 
 def fetch_metadata(url: str) -> PaperMetadata:

@@ -1,6 +1,6 @@
 """Data models for ResearchNote."""
 from datetime import datetime
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -34,6 +34,13 @@ class PaperNote(BaseModel):
     created_at: str = Field(default_factory=lambda: datetime.now().strftime("%Y-%m-%d"))
     updated_at: str = Field(default_factory=lambda: datetime.now().strftime("%Y-%m-%d"))
     status: str = "unread"  # unread | reading | done
+
+    # ── Lifecycle (used by prune) ────────────────────────────────────────────
+    last_opened: str = ""                     # ISO date; falls back to file mtime if blank
+    times_referenced: int = 0                 # incoming wikilinks across vault (recomputed by prune)
+    read_status: str = "skimmed"              # skimmed | read | deep
+    ingested_via: str = "manual"              # manual | email
+    upstream_topic_scores: Dict[str, float] = Field(default_factory=dict)
 
     # Content sections
     problem: str = ""

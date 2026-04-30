@@ -3,9 +3,9 @@ requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "researchnote"
+name = "nextbrain"
 version = "0.3.0"
-description = "ResearchNote: paper reading notes with LLM — fetch metadata, generate structured notes, manage in Obsidian"
+description = "NextBrain: AI-powered research knowledge base — ingest papers, generate notes, manage in Obsidian"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
@@ -21,14 +21,20 @@ dependencies = [
 [project.optional-dependencies]
 browser = ["playwright>=1.40.0"]
 rag = ["chromadb>=0.4.0", "sentence-transformers>=2.2.0"]
-all = ["researchnote[browser,rag]"]
+ingest = [
+    "beautifulsoup4>=4.12",
+    "google-api-python-client>=2.100",
+    "google-auth-httplib2>=0.2",
+    "google-auth-oauthlib>=1.2",
+]
+all = ["nextbrain[browser,rag,ingest]"]
 dev = ["pytest", "ruff"]
 
 [project.scripts]
-researchnote = "researchnote.cli:main"
+nextbrain = "nextbrain.cli:main"
 
 [tool.setuptools.packages.find]
-include = ["researchnote*"]
+include = ["nextbrain*"]
 
 [tool.setuptools.package-data]
-"researchnote.skills" = ["**/*.md"]
+"nextbrain.skills" = ["**/*.md"]

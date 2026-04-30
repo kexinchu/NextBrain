@@ -47,6 +47,16 @@ zotero:
 #   Papers-<paper_type>/  — paper reading notes (e.g. Papers-ANNS, Papers-RAG)
 #   Idea/                 — research ideas
 #   Explore/              — exploration reports
+# For a fuller PhD workspace, run:
+#   researchnote workspace-init
+# This scaffolds:
+#   Concepts/             — concept and method notes
+#   Projects/             — active research threads
+#   Syntheses/            — weekly digests and related-work maps
+#   Daily/                — daily research logs
+#   Dashboards/           — home page and dashboards
+#   Research/             — topic tracking config
+#   Templates/            — reusable note templates
 #
 # How to find your vault path:
 #   - Open Obsidian → click vault name (bottom-left) → "Manage vaults"

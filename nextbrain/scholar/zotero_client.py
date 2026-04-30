@@ -1,13 +1,13 @@
 """Zotero integration via pyzotero."""
 from typing import Optional
 
-from researchnote.models import PaperMetadata
+from nextbrain.models import PaperMetadata
 
 
 def _get_zotero():
     """Get pyzotero Zotero client."""
     from pyzotero import zotero
-    from researchnote.config import get_zotero_library_id, get_zotero_api_key, get_zotero_library_type
+    from nextbrain.config import get_zotero_library_id, get_zotero_api_key, get_zotero_library_type
     library_id = get_zotero_library_id()
     api_key = get_zotero_api_key()
     library_type = get_zotero_library_type()

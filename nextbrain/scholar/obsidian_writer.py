@@ -3,9 +3,9 @@ import re
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from researchnote.config import get_obsidian_vault_path, get_output_language
-from researchnote.models import PaperNote, IdeaNote
-from researchnote.tools.io import write_markdown
+from nextbrain.config import get_obsidian_vault_path, get_output_language
+from nextbrain.models import PaperNote, IdeaNote
+from nextbrain.tools.io import write_markdown
 
 
 # ── Duplicate detection ──────────────────────────────────────────────────────
@@ -190,17 +190,23 @@ def write_paper_note(
     vault_path: Optional[str] = None,
     fig_paths: Optional[Dict[str, str]] = None,
     fig_captions: Optional[Dict[str, str]] = None,
+    subfolder: Optional[str] = None,
 ) -> Path:
-    """Write a paper note to Obsidian vault under Papers-<paper_type>/.
+    """Write a paper note to Obsidian vault.
+
+    By default writes to Papers-<paper_type>/. If `subfolder` is given (e.g.
+    "Inbox"), writes there instead — used by ingest filter for items that
+    don't auto-pass and need user review.
 
     Args:
         fig_paths: {fig_id: relative_path} mapping for saved images.
         fig_captions: {fig_id: caption_text} for alt text.
+        subfolder: Override target folder (relative to vault).
 
     Returns the path to the written file.
     """
     vault = Path(vault_path or get_obsidian_vault_path())
-    paper_dir = vault / f"Papers-{note.paper_type}"
+    paper_dir = vault / subfolder if subfolder else vault / f"Papers-{note.paper_type}"
     paper_dir.mkdir(parents=True, exist_ok=True)
     filename = _make_paper_filename(note) + ".md"
     filepath = paper_dir / filename
@@ -221,6 +227,13 @@ def write_paper_note(
             text += _build_figure_md(figs, fig_paths, fig_captions) + "\n"
         return text
 
+    upstream_yaml = ""
+    if note.upstream_topic_scores:
+        lines = "\n".join(f"  {k}: {v}" for k, v in note.upstream_topic_scores.items())
+        upstream_yaml = f"\n{lines}"
+    else:
+        upstream_yaml = " {}"
+
     md = f"""---
 title: "{note.title}"
 type: paper
@@ -234,6 +247,11 @@ tags: {tags_yaml}
 created_at: {note.created_at}
 updated_at: {note.updated_at}
 status: {note.status}
+last_opened: "{note.last_opened}"
+times_referenced: {note.times_referenced}
+read_status: {note.read_status}
+ingested_via: {note.ingested_via}
+upstream_topic_scores:{upstream_yaml}
 ---
 
 # {note.title}

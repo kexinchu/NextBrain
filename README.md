@@ -1,4 +1,4 @@
-# ResearchBot
+# ResearchNote
 
 Research assistant toolkit for paper management, idea exploration, experiment design, and knowledge organization. Built around **Zotero** (canonical paper library) + **Obsidian** (editable note layer) with local-first RAG for context retrieval.
 
@@ -7,18 +7,46 @@ Research assistant toolkit for paper management, idea exploration, experiment de
 ## Commands
 
 ```bash
-researchbot init                   # Generate config.yaml template
-researchbot record <url>           # Record a paper → Zotero + Obsidian
-researchbot note [--type idea]     # Create a structured note → Obsidian
-researchbot explore <topic>        # Deep research exploration → report
-researchbot experiment <idea>      # Quick experiment design → code scaffolds
-researchbot index                  # Index Obsidian vault into RAG
+researchnote init                   # Generate config.yaml template
+researchnote workspace-init         # Scaffold a PhD knowledge workspace in Obsidian
+researchnote record <url>           # Record a paper -> Zotero + Obsidian
+researchnote note [--type idea]     # Create a structured note -> Obsidian
+researchnote index                  # Index Obsidian vault into RAG
 
-# for cache within the session, can open/close an session 
-researchbot browser start
-researchbot browser new    # create new session
-researchbot browser stop
+# Email-driven ingest (second-stage filter on AI Digest emails)
+researchnote ingest-mail [--dry-run]            # Pull unread digests via Gmail API + filter
+researchnote ingest-mail --eml path.eml         # Parse a local .eml (debug)
+researchnote topics [--recompute]               # Show auto-inferred active topics
+researchnote prune [--apply]                    # Archive unread/unreferenced notes
+researchnote prune --topic Diffusion-Language-Model --apply
+researchnote prune --inbox-older-than 14 --apply
+
+# Synthesis + dashboard
+researchnote digest [--days 7]                  # Weekly synthesis -> Syntheses/<YYYY-Www>-weekly.md
+researchnote stats                              # Vault health dashboard (no LLM)
+
+# for cache within the session, can open/close an session
+researchnote browser start
+researchnote browser new    # create new session
+researchnote browser stop
 ```
+
+### Curation philosophy
+
+NextBrain is a **second-stage filter + active forgetter**, not a paper hoard:
+
+- A separate upstream project pre-filters papers and emails them in a fixed
+  HTML schema. `ingest-mail` parses those emails (no LLM call — the schema
+  is structured), applies dedup → active-topic match → RAG-novelty checks,
+  then writes pass-through papers directly to `Papers-<type>/` and
+  borderline ones to `Inbox/` for manual review in Obsidian.
+- `topics` auto-infers your active research directions from the last
+  ~30 days of vault activity (exponential decay, half-life 14d). Used by
+  the ingest filter and surfaced for inspection.
+- `prune` archives papers that have gone unread for 90+ days *and* have
+  zero incoming wikilinks (incl. from `Idea/`, `Syntheses/`, `Daily/`,
+  `Concepts/`). Default is dry-run; `--apply` moves files to
+  `<vault>/Archive/<date>/` and removes their RAG entries.
 
 ---
 
@@ -48,14 +76,17 @@ pip install -e ".[all]"
 
 ```bash
 # 1. Generate config file (either way works)
-researchbot init                      # generates config.yaml in current directory
+researchnote init                     # generates config.yaml in current directory
 # OR: copy the example template
 cp config.yaml.example config.yaml
 
 # 2. Edit config.yaml — fill in your API keys and paths (see below)
 
-# 3. Start using
-researchbot record https://arxiv.org/abs/2406.12385
+# 3. Scaffold your vault for PhD workflows
+researchnote workspace-init
+
+# 4. Start using
+researchnote record https://arxiv.org/abs/2406.12385
 ```
 
 ---
@@ -66,15 +97,15 @@ All configuration is in **`config.yaml`**. Environment variables also work and t
 
 ```bash
 # Generate config template in current directory
-researchbot init
+researchnote init
 
-# Or generate in ~/.researchbot/ (global, shared across projects)
-researchbot init --global
+# Or generate in ~/.researchnote/ (global, shared across projects)
+researchnote init --global
 ```
 
 Config file search order:
 1. `./config.yaml` (project-local)
-2. `~/.researchbot/config.yaml` (user-global)
+2. `~/.researchnote/config.yaml` (user-global)
 
 ### 1. LLM (required)
 
@@ -108,7 +139,7 @@ obsidian:
 3. The path is shown next to your vault name
 4. Or: your vault is just a regular folder — find it in Finder/Explorer
 
-ResearchBot auto-creates this structure inside your vault:
+ResearchNote auto-creates this structure inside your vault:
 
 ```
 <vault>/
@@ -122,9 +153,28 @@ ResearchBot auto-creates this structure inside your vault:
 └── Explore/                 # Exploration reports
 ```
 
+For a fuller PhD workspace, run:
+
+```bash
+researchnote workspace-init
+```
+
+This adds:
+
+```
+<vault>/
+├── Concepts/                # Cross-paper concepts and methods
+├── Projects/                # Active research threads
+├── Syntheses/               # Weekly digests, survey drafts, research maps
+├── Daily/                   # Daily logs
+├── Dashboards/              # Home page / dashboards
+├── Research/                # Topic-tracking config examples
+└── Templates/               # Reusable note templates
+```
+
 ### 3. Zotero (optional, recommended)
 
-Zotero stores your paper library with PDF attachments. If not configured, `researchbot record` still works — it just skips Zotero.
+Zotero stores your paper library with PDF attachments. If not configured, `researchnote record` still works — it just skips Zotero.
 
 ```yaml
 zotero:

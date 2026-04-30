@@ -5,11 +5,11 @@ same shell session.  CLI commands communicate with the daemon via HTTP on localh
 
 Lifecycle:
   1. First `call_llm_browser()` detects no daemon → spawns one as a subprocess.
-  2. Subsequent calls (even from different `researchnote` processes) POST to the daemon.
+  2. Subsequent calls (even from different `nextbrain` processes) POST to the daemon.
   3. Daemon auto-exits after IDLE_TIMEOUT seconds of inactivity (default 30 min).
-  4. `researchnote browser stop` or shell exit kills the daemon.
+  4. `nextbrain browser stop` or shell exit kills the daemon.
 
-State files (in ~/.researchnote/):
+State files (in ~/.nextbrain/):
   browser_daemon.pid   — daemon PID
   browser_daemon.port  — HTTP port the daemon listens on
 """
@@ -26,7 +26,7 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 
 # ── paths ────────────────────────────────────────────────────────────────────
-STATE_DIR = Path.home() / ".researchnote"
+STATE_DIR = Path.home() / ".nextbrain"
 PID_FILE = STATE_DIR / "browser_daemon.pid"
 PORT_FILE = STATE_DIR / "browser_daemon.port"
 
@@ -164,7 +164,7 @@ class _DaemonHandler(BaseHTTPRequestHandler):
         global _daemon_session_started
         try:
             with _browser_lock:
-                from researchnote.tools.browser_llm import end_browser_session
+                from nextbrain.tools.browser_llm import end_browser_session
                 end_browser_session()
                 _daemon_session_started = False
             self._respond(200, {"status": "session reset, next chat will open new conversation"})
@@ -200,7 +200,7 @@ def _do_browser_call(system, user, json_mode, max_tokens, same_session):
     subsequent calls append to the same conversation (reusing the ChatGPT session).
     """
     global _daemon_session_started
-    from researchnote.tools.browser_llm import (
+    from nextbrain.tools.browser_llm import (
         _call_llm_browser_inprocess, start_browser_session,
     )
 
@@ -349,7 +349,7 @@ def ensure_daemon_running() -> int:
 
     # Start daemon as detached subprocess
     daemon_cmd = [
-        sys.executable, "-m", "researchnote.tools.browser_daemon"
+        sys.executable, "-m", "nextbrain.tools.browser_daemon"
     ]
 
     # Use subprocess to start daemon, detached from parent

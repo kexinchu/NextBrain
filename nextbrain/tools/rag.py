@@ -9,7 +9,7 @@ Usage:
   - query(topic, k=10) to retrieve relevant context
   - format_retrieved_for_prompt(results) to inject into LLM prompts
 
-Requires: pip install researchnote[rag]
+Requires: pip install nextbrain[rag]
 """
 import os
 import re
@@ -17,11 +17,11 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-_COLLECTION_NAME = "researchnote"
+_COLLECTION_NAME = "nextbrain"
 
 
 def _get_rag_dir() -> Path:
-    from researchnote.config import get_rag_dir
+    from nextbrain.config import get_rag_dir
     return Path(get_rag_dir()).expanduser().resolve()
 
 
@@ -34,7 +34,7 @@ def _get_client(rag_dir: Path):
 def _get_embedding_function():
     try:
         from chromadb.utils.embedding_functions import SentenceTransformerEmbeddingFunction
-        from researchnote.config import get_rag_embedding_model, get_hf_token
+        from nextbrain.config import get_rag_embedding_model, get_hf_token
 
         # Set HF token for gated model downloads if configured
         hf_token = get_hf_token()
@@ -55,7 +55,7 @@ def _ensure_collection(rag_dir: Path):
     ef = _get_embedding_function()
     if ef is None:
         raise RuntimeError(
-            "RAG requires chromadb and sentence-transformers. Run: pip install researchnote[rag]"
+            "RAG requires chromadb and sentence-transformers. Run: pip install nextbrain[rag]"
         )
     return client.get_or_create_collection(
         name=_COLLECTION_NAME,
@@ -160,7 +160,7 @@ def index_obsidian_vault(vault_path: Optional[str] = None) -> int:
 
     Returns count of documents indexed.
     """
-    from researchnote.config import get_obsidian_vault_path
+    from nextbrain.config import get_obsidian_vault_path
 
     vault = Path(vault_path or get_obsidian_vault_path())
     if not vault.exists():

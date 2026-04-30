@@ -2,7 +2,7 @@
 
 Config file search order:
   1. ./config.yaml  (project-local)
-  2. ~/.researchnote/config.yaml  (user-global)
+  2. ~/.nextbrain/config.yaml  (user-global)
 
 Every field can also be set via environment variable (takes precedence over config.yaml).
 """
@@ -16,10 +16,10 @@ _CONFIG_CACHE: Optional[Dict[str, Any]] = None
 
 
 def _find_config_file() -> Optional[Path]:
-    """Find config.yaml in CWD or ~/.researchnote/."""
+    """Find config.yaml in CWD or ~/.nextbrain/."""
     candidates = [
         Path.cwd() / "config.yaml",
-        Path.home() / ".researchnote" / "config.yaml",
+        Path.home() / ".nextbrain" / "config.yaml",
     ]
     for p in candidates:
         if p.exists():
@@ -119,7 +119,7 @@ def get_obsidian_vault_path() -> str:
 
 def get_rag_dir() -> str:
     return str(_get("rag", "dir", "RESEARCHNOTE_RAG_DIR",
-                     str(Path.home() / ".researchnote" / "rag")))
+                     str(Path.home() / ".nextbrain" / "rag")))
 
 def get_rag_embedding_model() -> str:
     return str(_get("rag", "embedding_model", "RESEARCHNOTE_RAG_EMBEDDING_MODEL",
@@ -135,6 +135,64 @@ def get_hf_token() -> Optional[str]:
 def get_output_language() -> str:
     """Return configured output language: 'zh' for Chinese, 'en' for English."""
     return str(_get("output", "language", "RESEARCHNOTE_OUTPUT_LANGUAGE", "zh"))
+
+# ── Mail ingest ───────────────────────────────────────────────────────────────
+
+def get_mail_user() -> str:
+    return str(_get("mail", "user", "RESEARCHNOTE_MAIL_USER", ""))
+
+def get_mail_credentials_path() -> str:
+    return str(_get("mail", "credentials", "RESEARCHNOTE_MAIL_CREDENTIALS",
+                    str(Path.home() / ".nextbrain" / "gmail_credentials.json")))
+
+def get_mail_token_path() -> str:
+    return str(_get("mail", "token", "RESEARCHNOTE_MAIL_TOKEN",
+                    str(Path.home() / ".nextbrain" / "gmail_token.json")))
+
+def get_mail_sender_filter() -> str:
+    return str(_get("mail", "sender_filter", "RESEARCHNOTE_MAIL_SENDER", ""))
+
+def get_mail_subject_prefix() -> str:
+    return str(_get("mail", "subject_prefix", "RESEARCHNOTE_MAIL_SUBJECT_PREFIX",
+                    "[AI Digest]"))
+
+def get_mail_label() -> str:
+    """Optional Gmail label to filter by; default INBOX."""
+    return str(_get("mail", "label", "RESEARCHNOTE_MAIL_LABEL", "INBOX"))
+
+
+# ── Active topics ─────────────────────────────────────────────────────────────
+
+def get_topics_top_k() -> int:
+    return int(_get("topics", "active_top_k", "RESEARCHNOTE_TOPICS_TOP_K", 5))
+
+def get_topics_half_life_days() -> int:
+    return int(_get("topics", "decay_half_life_days", "RESEARCHNOTE_TOPICS_HALF_LIFE", 14))
+
+def get_topics_recompute_hours() -> int:
+    return int(_get("topics", "recompute_after_hours", "RESEARCHNOTE_TOPICS_RECOMPUTE", 24))
+
+def get_topics_cache_path() -> str:
+    return str(_get("topics", "cache_path", "RESEARCHNOTE_TOPICS_CACHE",
+                    str(Path.home() / ".nextbrain" / "active_topics.json")))
+
+# ── Filter / Prune ────────────────────────────────────────────────────────────
+
+def get_filter_rag_dup_threshold() -> float:
+    return float(_get("filter", "rag_dup_threshold", "RESEARCHNOTE_FILTER_DUP", 0.92))
+
+def get_filter_min_topic_score() -> float:
+    return float(_get("filter", "min_topic_score", "RESEARCHNOTE_FILTER_MIN_TOPIC", 0.5))
+
+def get_prune_unread_threshold_days() -> int:
+    return int(_get("prune", "unread_threshold_days", "RESEARCHNOTE_PRUNE_UNREAD", 90))
+
+def get_prune_inbox_threshold_days() -> int:
+    return int(_get("prune", "inbox_threshold_days", "RESEARCHNOTE_PRUNE_INBOX", 14))
+
+def get_archive_dir_name() -> str:
+    return str(_get("prune", "archive_dir", "RESEARCHNOTE_ARCHIVE_DIR", "Archive"))
+
 
 # ── Paper type taxonomy ───────────────────────────────────────────────────────
 
@@ -167,7 +225,7 @@ def get_paper_types() -> List[str]:
 
 CONFIG_TEMPLATE = """\
 # ResearchNote Configuration
-# Place this file at ./config.yaml (project-local) or ~/.researchnote/config.yaml (global)
+# Place this file at ./config.yaml (project-local) or ~/.nextbrain/config.yaml (global)
 # All fields can also be set via environment variables (env vars take precedence)
 
 # ── LLM ──────────────────────────────────────────────────────────────────────
@@ -189,17 +247,19 @@ zotero:
 
 # ── Obsidian ─────────────────────────────────────────────────────────────────
 # Required: path to your Obsidian vault folder.
-# ResearchNote creates folders: Papers-<paper_type>/, Idea/
+# ResearchNote writes paper notes to Papers-<paper_type>/ and idea notes to Idea/.
+# For a fuller PhD workspace (Concepts, Projects, Syntheses, Daily, etc.),
+# run: nextbrain workspace-init
 obsidian:
   vault_path: "~/ObsidianVault"    # Absolute path to your Obsidian vault
                                     # Env: RESEARCHNOTE_OBSIDIAN_VAULT
 
 # ── RAG ──────────────────────────────────────────────────────────────────────
 # Optional. Enables semantic search across your notes.
-# Requires: pip install researchnote[rag]
-# After configuration, run: researchnote index
+# Requires: pip install nextbrain[rag]
+# After configuration, run: nextbrain index
 rag:
-  dir: "~/.researchnote/rag"      # ChromaDB vector database path
+  dir: "~/.nextbrain/rag"      # ChromaDB vector database path
                                     # Env: RESEARCHNOTE_RAG_DIR
   embedding_model: "all-MiniLM-L6-v2"
   hf_token: ""                    # HuggingFace token (Env: HF_TOKEN)
@@ -221,4 +281,38 @@ paper_types:
   - Memory
   - Deterministic-LLM
   - Other
+
+# ── Mail ingest (optional) ────────────────────────────────────────────────────
+# For `nextbrain ingest-mail` — pulls AI Digest emails via Gmail API.
+# Requires: pip install nextbrain[ingest]
+# Setup:
+#   1. Create OAuth client at console.cloud.google.com (Desktop app),
+#      download credentials.json to the path below.
+#   2. First run will open a browser for consent; token cached afterwards.
+mail:
+  user: ""                                 # Your Gmail address
+  credentials: "~/.nextbrain/gmail_credentials.json"
+  token: "~/.nextbrain/gmail_token.json"
+  sender_filter: ""                        # Only ingest emails from this sender
+  subject_prefix: "[AI Digest]"            # Subject must start with this
+  label: "INBOX"                           # Gmail label to scan
+  processed_label: "ResearchNote/Processed"  # Applied after successful ingest
+
+# ── Active-topic inference ────────────────────────────────────────────────────
+topics:
+  active_top_k: 5
+  decay_half_life_days: 14                 # Recency weight half-life
+  recompute_after_hours: 24                # Cache TTL
+  cache_path: "~/.nextbrain/active_topics.json"
+
+# ── Filter (second-stage on ingest) ───────────────────────────────────────────
+filter:
+  rag_dup_threshold: 0.92                  # Cosine sim >= → flag duplicate-of, route to Inbox/
+  min_topic_score: 0.5                     # Upstream topic-tag score below this → Inbox/
+
+# ── Prune ─────────────────────────────────────────────────────────────────────
+prune:
+  unread_threshold_days: 90                # Unread+unreferenced for this many days → prunable
+  inbox_threshold_days: 14                 # Inbox/ items older than this → prunable
+  archive_dir: "Archive"                   # Relative to vault; pruned notes moved here
 """

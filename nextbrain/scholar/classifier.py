@@ -1,8 +1,8 @@
 """Classify papers into paper_type using LLM zero-shot classification."""
 import json
 
-from researchnote.config import get_paper_types
-from researchnote.models import PaperMetadata
+from nextbrain.config import get_paper_types
+from nextbrain.models import PaperMetadata
 
 
 def classify_paper(meta: PaperMetadata) -> str:
@@ -85,7 +85,7 @@ def _keyword_classify(meta: PaperMetadata, paper_types: list[str]) -> str:
 
 def _llm_classify(meta: PaperMetadata, paper_types: list[str]) -> str:
     """Use LLM for classification."""
-    from researchnote.tools.llm import call_llm
+    from nextbrain.tools.llm import call_llm
 
     system = (
         "You are a research paper classifier. Given a paper's title and abstract, "
