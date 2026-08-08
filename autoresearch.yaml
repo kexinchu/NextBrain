@@ -1,0 +1,36 @@
+# Human-authorized deterministic commands used by conversation skills.
+version: 1
+research:
+  domain: systems-and-ai-infrastructure
+  primary_venues:
+    - SOSP
+    - FAST
+    - OSDI
+    - EuroSys
+    - MLSys
+  secondary_venues:
+    - ICLR
+    - NeurIPS
+    - AAAI
+    - DAC
+  historical_venues:
+    - USENIX ATC
+commands:
+  repository-tests:
+    skill: implementation-loop
+    argv:
+      - python
+      - -m
+      - pytest
+      - code/tests
+    timeout: 3600
+  experiment-batch:
+    skill: experiment-loop
+    argv:
+      - python
+      - experiments/scripts/run_batch.py
+    timeout: 86400
+snapshot:
+  exclude:
+    - datasets
+    - venue-corpus

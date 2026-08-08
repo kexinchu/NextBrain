@@ -1,0 +1,6 @@
+interface:
+  display_name: "AutoResearch Story Freeze"
+  short_description: "Draft and explicitly approve the research contract."
+  default_prompt: "Draft or approve the frozen paper story for the accepted idea."
+policy:
+  allow_implicit_invocation: false

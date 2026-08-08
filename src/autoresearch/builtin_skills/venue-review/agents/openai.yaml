@@ -1,0 +1,6 @@
+interface:
+  display_name: "AutoResearch Venue Review"
+  short_description: "Produce an independent venue-specific paper review."
+  default_prompt: "Review the manuscript against the target venue criteria."
+policy:
+  allow_implicit_invocation: false

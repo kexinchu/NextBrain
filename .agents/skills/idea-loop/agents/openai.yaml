@@ -1,0 +1,6 @@
+interface:
+  display_name: "AutoResearch Idea Loop"
+  short_description: "Alternate independent scout and challenger agents."
+  default_prompt: "Run the idea loop for the active topic and stop at the next human gate."
+policy:
+  allow_implicit_invocation: false

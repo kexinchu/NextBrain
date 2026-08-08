@@ -1,46 +1,16 @@
-# Python
 __pycache__/
 *.py[cod]
-*.so
 *.egg-info/
-dist/
-build/
-
-# Virtual environment
-venv/
+.pytest_cache/
+.ruff_cache/
 .venv/
-
-# Config (contains API keys)
-config.yaml
-
-# Artifacts (generated per-run)
-artifacts/
-review/
-runs/
-paper/
-rag/
-explore/
-experiments/
-
-# LLM response cache
-.llm_cache/
-
-# Package build
-*.egg-info/
-
-# Browser profiles
-cookies/
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# OS
+venv/
+build/
+dist/
 .DS_Store
-Thumbs.db
+.env
+.claude/settings.local.json
 
-# Logs
-*.log
+# Runtime workspaces and model output are intentionally project-local but untracked.
+.autoresearch/
+runs/

@@ -1,0 +1,6 @@
+interface:
+  display_name: "AutoResearch Implementation"
+  short_description: "Implement and test the frozen design in staging."
+  default_prompt: "Continue implementation without changing the frozen paper story."
+policy:
+  allow_implicit_invocation: false
