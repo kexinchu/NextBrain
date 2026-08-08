@@ -1,0 +1,6 @@
+interface:
+  display_name: "AutoResearch Experiments"
+  short_description: "Execute the frozen experiment matrix."
+  default_prompt: "Run the next frozen experiment batch and report contradictions."
+policy:
+  allow_implicit_invocation: false

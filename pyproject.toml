@@ -1,40 +1,37 @@
 [build-system]
-requires = ["setuptools>=68.0", "wheel"]
+requires = ["setuptools>=75", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "nextbrain"
+name = "nextbrain-autoresearch"
 version = "0.3.0"
-description = "NextBrain: AI-powered research knowledge base — ingest papers, generate notes, manage in Obsidian"
+description = "Auditable, freeze-gated skills for human-directed auto-research"
 readme = "README.md"
-requires-python = ">=3.10"
-license = {text = "MIT"}
-dependencies = [
-    "openai>=1.0.0",
-    "pydantic>=2.0",
-    "pyyaml>=6.0",
-    "arxiv>=2.1.0",
-    "pyzotero>=1.5.0",
-    "pymupdf>=1.24.0",
-]
+requires-python = ">=3.11"
+license = "MIT"
+authors = [{name = "NextBrain contributors"}]
+dependencies = ["PyYAML>=6.0"]
 
 [project.optional-dependencies]
-browser = ["playwright>=1.40.0"]
-rag = ["chromadb>=0.4.0", "sentence-transformers>=2.2.0"]
-ingest = [
-    "beautifulsoup4>=4.12",
-    "google-api-python-client>=2.100",
-    "google-auth-httplib2>=0.2",
-    "google-auth-oauthlib>=1.2",
-]
-all = ["nextbrain[browser,rag,ingest]"]
-dev = ["pytest", "ruff"]
+openai = ["openai>=1.99.0"]
+dev = ["build>=1.2", "pytest>=8.0", "ruff>=0.12"]
 
 [project.scripts]
-nextbrain = "nextbrain.cli:main"
+autoresearch = "autoresearch.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
-include = ["nextbrain*"]
+where = ["src"]
 
 [tool.setuptools.package-data]
-"nextbrain.skills" = ["**/*.md"]
+autoresearch = ["builtin_skills/*/SKILL.md", "builtin_skills/*/agents/*.yaml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"

@@ -1,485 +1,285 @@
-# ResearchNote
+# NextBrain AutoResearch
 
-Research assistant toolkit for paper management, idea exploration, experiment design, and knowledge organization. Built around **Zotero** (canonical paper library) + **Obsidian** (editable note layer) with local-first RAG for context retrieval.
+一个面向系统与机器学习研究的、**人为控制 + 可审计 + 有冻结边界**的 auto-research
+工具箱。它不是让一个 agent 从头到尾自由改写所有内容，而是把科研流程拆成六个可通过 `pip`
+安装、可在 GPT/Claude/Cursor 对话框直接触发的 skills，并由确定性 Python 状态机约束每轮读什么、
+能改什么、需要什么证据、何时必须停下报告。当前对话中选中的模型就是后台模型；skills 不会偷偷调用第二个模型。
 
----
+## 六个 skills
 
-## Commands
+| Skill | 角色与循环 | 可修改内容 | 必须停止的情况 |
+|---|---|---|---|
+| `idea-loop` | 两个独立的宿主原生 sub-agent：scout 与 sampled challenger 交替 | `story.md` | 撞车、motivation test 失败、需求冲突、或 idea 通过全部 gate |
+| `story-freeze` | idea + 人为干预 -> 科研合同 | `paper/STORY.md` | 设计/claim/实验矩阵仍有歧义 |
+| `implementation-loop` | 实现 + 小规模测试 | `code/core/`、`code/tests/`、支持性 probes | 需要改 idea/设计，或小测证伪前提 |
+| `experiment-loop` | 批量实验与结论导出 | `experiments/scripts/`、`experiments/results/` | 结果与冻结 prediction 不一致 |
+| `section-writing` | 按会议逐章优化 | 单个 `paper/manuscript/<section>.md` | 好的写法需要改变科学内容 |
+| `venue-review` | 按会议标准独立审查 | `reviews/` | 只审，不修改论文 |
+
+默认研究域是 systems 与 AI infrastructure。Active primary venues 为 SOSP、FAST、OSDI、
+EuroSys、MLSys；secondary venues 为 ICLR、NeurIPS、AAAI、DAC。输入 `NIPS` 会规范为
+`NeurIPS`。USENIX ATC 已在 ATC '25 后结束，因此只保留为历史论文风格与比较 corpus，不能作为
+新的 active submission target。会议规则、track、页数和审稿政策必须在每次 venue-dependent
+round 中从当年官方来源刷新，不能依赖静态记忆。详见 [Venue profiles](docs/venues.md)。
+
+## 安装到 GPT、Claude 和 Cursor
 
 ```bash
-researchnote init                   # Generate config.yaml template
-researchnote workspace-init         # Scaffold a PhD knowledge workspace in Obsidian
-researchnote record <url>           # Record a paper -> Zotero + Obsidian
-researchnote note [--type idea]     # Create a structured note -> Obsidian
-researchnote index                  # Index Obsidian vault into RAG
-
-# Email-driven ingest (second-stage filter on AI Digest emails)
-researchnote ingest-mail [--dry-run]            # Pull unread digests via Gmail API + filter
-researchnote ingest-mail --eml path.eml         # Parse a local .eml (debug)
-researchnote topics [--recompute]               # Show auto-inferred active topics
-researchnote prune [--apply]                    # Archive unread/unreferenced notes
-researchnote prune --topic Diffusion-Language-Model --apply
-researchnote prune --inbox-older-than 14 --apply
-
-# Synthesis + dashboard
-researchnote digest [--days 7]                  # Weekly synthesis -> Syntheses/<YYYY-Www>-weekly.md
-researchnote stats                              # Vault health dashboard (no LLM)
-
-# for cache within the session, can open/close an session
-researchnote browser start
-researchnote browser new    # create new session
-researchnote browser stop
+python -m pip install .
+autoresearch --workspace /path/to/research init
+cd /path/to/research
+autoresearch install-skills --target all --scope project
 ```
 
-### Curation philosophy
+安装结果：
 
-NextBrain is a **second-stage filter + active forgetter**, not a paper hoard:
+```text
+.agents/skills/       # GPT/ChatGPT desktop 与 Codex
+.claude/skills/       # Claude Code
+.cursor/skills/       # Cursor
+```
 
-- A separate upstream project pre-filters papers and emails them in a fixed
-  HTML schema. `ingest-mail` parses those emails (no LLM call — the schema
-  is structured), applies dedup → active-topic match → RAG-novelty checks,
-  then writes pass-through papers directly to `Papers-<type>/` and
-  borderline ones to `Inbox/` for manual review in Obsidian.
-- `topics` auto-infers your active research directions from the last
-  ~30 days of vault activity (exponential decay, half-life 14d). Used by
-  the ingest filter and surfaced for inspection.
-- `prune` archives papers that have gone unread for 90+ days *and* have
-  zero incoming wikilinks (incl. from `Idea/`, `Syntheses/`, `Daily/`,
-  `Concepts/`). Default is dry-run; `--apply` moves files to
-  `<vault>/Archive/<date>/` and removes their RAG entries.
+然后直接在对应对话框选择或调用 `idea-loop`、`story-freeze` 等 skill。Codex 可使用
+`$idea-loop` 或 `/skills`，Claude/Cursor 可使用 `/idea-loop`；GPT/ChatGPT desktop 在支持
+skills 的界面使用 `@` 选择。六份 skill 都声明或明确要求继承当前会话模型，并禁止调用
+`OpenAIAgent`、`CommandAgent`、模型 API 或 `autoresearch run`。OpenAI 客户端还会安装
+`agents/openai.yaml` UI metadata，并默认要求显式调用。完整说明见
+[Conversation hosts](docs/conversation-hosts.md)。
 
----
+Cursor 的官方说明目前仍把 Agent Skills 标为 Nightly 功能；若稳定版没有发现 `.cursor/skills/`，需
+在 Cursor 设置中切换到 Nightly 并重启。
 
-## Installation
-
-Requires **Python 3.10+**.
+如只安装一个客户端或安装到用户级目录：
 
 ```bash
-git clone https://github.com/your-repo/ResearchBot.git
-cd ResearchBot
+autoresearch install-skills --target claude --scope project
+autoresearch install-skills --target cursor --scope user
+```
+
+仓库还带有 `.codex-plugin/plugin.json`，可作为本地 Codex plugin bundle 使用。ChatGPT web
+工作区的服务端发布仍需要该工作区对应的 plugin/skill 分发流程；`pip install` 本身不会把本地
+文件发布到 ChatGPT web。
+
+开发安装与测试：
+
+```bash
 pip install -e .
 
-# With local RAG (ChromaDB + sentence-transformers)
-pip install -e ".[rag]"
-
-# With browser mode (ChatGPT web UI, no API key needed)
-pip install -e ".[browser]"
-playwright install chromium
-
-# Everything
-pip install -e ".[all]"
+pip install -e ".[dev]"
 ```
 
----
-
-## Quick Start
+安装后也可检查 skills：
 
 ```bash
-# 1. Generate config file (either way works)
-researchnote init                     # generates config.yaml in current directory
-# OR: copy the example template
-cp config.yaml.example config.yaml
-
-# 2. Edit config.yaml — fill in your API keys and paths (see below)
-
-# 3. Scaffold your vault for PhD workflows
-researchnote workspace-init
-
-# 4. Start using
-researchnote record https://arxiv.org/abs/2406.12385
+autoresearch skills list
+autoresearch skills show idea-loop
+autoresearch venues list
+autoresearch venues show NIPS  # returns canonical NeurIPS profile
 ```
 
----
+## 对话原生工作流
 
-## Configuration
-
-All configuration is in **`config.yaml`**. Environment variables also work and take precedence over config.yaml.
+### 1. 初始化，并逐条记录你对 agents 说的话
 
 ```bash
-# Generate config template in current directory
-researchnote init
-
-# Or generate in ~/.researchnote/ (global, shared across projects)
-researchnote init --global
+autoresearch --workspace ./demo init
+# 编辑 ./demo/topic.md，写入研究方向、scope 和 kill criteria
+autoresearch --workspace ./demo message "研究方向是 CXL + ANNS。"
+autoresearch --workspace ./demo message "不要提出已有进行中的 Repair idea。"
+autoresearch --workspace ./demo message --file ./long-requirement.md
 ```
 
-Config file search order:
-1. `./config.yaml` (project-local)
-2. `~/.researchnote/config.yaml` (user-global)
+每条消息都会成为独立文件：
 
-### 1. LLM (required)
+```text
+demo/requirements/messages/
+├── 0001-<timestamp>.md
+├── 0002-<timestamp>.md
+└── 0003-<timestamp>.md
+```
 
-You need an LLM API to generate reading notes, classify papers, and run explore/experiment.
+workspace 中的 `topic.md` 是 active topic 文档；`.autoresearch/active-topic.json` 保存它的路径。
+每条 `message` 和 `run` directive 都会自动镜像进该文档的 `Session requirements`，同时保留上述
+独立 Markdown 源记录。`.manifest.json` 保存每条历史消息的哈希；旧消息被改写时系统拒绝继续。
+每轮 agent 调用前，系统读取完整 topic 文档、验证所有源消息并计算组合 SHA-256 digest；agent 必须回显该 digest，
+结束后系统写 `runs/<round>/alignment.md`。如果调用期间需求发生变化，该轮自动变成 `report`，
+需要基于新需求重跑。每个 `autoresearch run ...` 的科研参数也会先自动保存为一条独立 run
+directive；使用 Python API 时，则由调用方在调用 skill 前执行 `UserMessageJournal.add(...)`。
+
+长 session 可以维护经过覆盖检查的压缩视图。摘要必须显式引用每个 message ID；新增消息会立即让
+旧摘要失效，系统自动回退到完整 topic：
+
+```bash
+autoresearch requirements update --file requirements-summary-draft.md
+autoresearch requirements status
+```
+
+每次 skill 收到新的用户指令，都会先把原话写成新的 Markdown，再调用 `message --file`。
+`host begin` 必须绑定返回的最新 message filename；状态机拒绝旧消息、重复 pending round、错误角色、
+跳阶段、超出 round budget 或连续执行两个 scout。
+
+`host begin` 返回独立的 `transaction_workspace`。模型只能在这里写拟议产物，同时生成
+`evidence.json`。`host complete` 检查需求 digest、冻结哈希、artifact schema、证据和状态迁移后才把
+文件原子提升到主 workspace。若模型直接修改主 workspace，系统把违规版本保存到 transaction 的
+`quarantine/`，再恢复轮次开始前的内容。每轮报告保存在 `runs/<round-id>/alignment.md`。
+
+`idea-loop` 会要求宿主启动两个全新的原生 sub-agent。Python 状态机会核对 agent ID、强制
+scout/challenger 交替，并根据 collision risk、novelty uncertainty、scope risk、motivation cost
+与 approach diversity 生成 challenger 的风险分层样本。宿主没有 sub-agent 能力时必须停下。
+
+`story.md` 和 `paper/STORY.md` 使用人可读 Markdown + YAML frontmatter，机器验证 candidate、source、
+claim 和 experiment ID 的引用关系；paper-stage 的每个实验还必须冻结 prediction、数据集、baseline、
+metric、scale、seed、资源预算、成功阈值与 kill criteria。格式见
+[Research contracts](docs/contracts.md)。
+
+### 2. 预授权确定性命令
+
+模型不能提供任意 shell command。用户在 `autoresearch.yaml` 中按名称授权精确 argv：
 
 ```yaml
-llm:
-  api_key: "sk-..."               # Your OpenAI API key
-  base_url: ""                     # Leave empty for OpenAI; set for other providers
-  model: "gpt-4o-mini"            # Model to use
+commands:
+  implementation-tests:
+    skill: implementation-loop
+    argv: [python, -m, pytest, code/tests]
+    timeout: 3600
 ```
 
-**How to get your API key:**
-- **OpenAI**: Go to [platform.openai.com/api-keys](https://platform.openai.com/api-keys) → "Create new secret key"
-- **DeepSeek**: Go to [platform.deepseek.com/api_keys](https://platform.deepseek.com/api_keys) → create key, set `base_url: "https://api.deepseek.com/v1"` and `model: "deepseek-chat"`
-- **Local vLLM/Ollama**: Set `base_url: "http://localhost:8000/v1"` (or your local port), `api_key: "not-needed"`
-- **Browser mode** (no key needed): Use `--browser` flag on commands — it automates ChatGPT web UI via Playwright
-
-### 2. Obsidian (required)
-
-Point to your Obsidian vault folder — this is where all notes are written.
-
-```yaml
-obsidian:
-  vault_path: "~/ObsidianVault"   # Absolute path to your vault
-```
-
-**How to find your vault path:**
-1. Open Obsidian
-2. Click the vault name (bottom-left) → "Manage vaults"
-3. The path is shown next to your vault name
-4. Or: your vault is just a regular folder — find it in Finder/Explorer
-
-ResearchNote auto-creates this structure inside your vault:
-
-```
-<vault>/
-├── Papers-ANNS/             # Paper reading notes (by type)
-├── Papers-RAG/
-├── Papers-LLM-Opt/
-├── Papers-KV-Cache/
-├── Papers-.../
-├── Papers-Other/
-├── Idea/                    # Research ideas
-└── Explore/                 # Exploration reports
-```
-
-For a fuller PhD workspace, run:
+轮次中只能调用：
 
 ```bash
-researchnote workspace-init
+autoresearch host check <round-id> implementation-tests
 ```
 
-This adds:
+实现冻结必须有当轮成功 check receipt，而且 receipt 的 workspace digest 必须等于最终 staged 内容；
+check 后再改代码会使 receipt 失效。实验完成还必须覆盖冻结矩阵的全部 experiment ID，并提交与冻结
+实验 mapping 匹配的 protocol digest。
 
-```
-<vault>/
-├── Concepts/                # Cross-paper concepts and methods
-├── Projects/                # Active research threads
-├── Syntheses/               # Weekly digests, survey drafts, research maps
-├── Daily/                   # Daily logs
-├── Dashboards/              # Home page / dashboards
-├── Research/                # Topic-tracking config examples
-└── Templates/               # Reusable note templates
-```
+### 3. Story 两阶段批准
 
-### 3. Zotero (optional, recommended)
+第一轮 story draft 只能 `continue`。系统返回 draft digest 后，用户必须在后续消息中给出：
 
-Zotero stores your paper library with PDF attachments. If not configured, `researchnote record` still works — it just skips Zotero.
-
-```yaml
-zotero:
-  api_key: ""                      # Your Zotero API key
-  library_id: ""                   # Your Zotero user ID (numeric)
-  library_type: "user"             # "user" or "group"
+```text
+APPROVE paper/STORY.md <exact-draft-digest>
 ```
 
-**How to get these values:**
+记录这条新消息并执行 `host approve-story` 后，未改动的同一 draft 才能 `satisfied` 并冻结。
 
-1. **API key**: Go to [zotero.org/settings/keys](https://www.zotero.org/settings/keys) → "Create new private key"
-   - Name: `ResearchBot` (or anything)
-   - Check **"Allow library access"** → "Read/Write"
-   - Check **"Allow write access"**
-   - Save → copy the key string
-
-2. **Library ID**: On the same page ([zotero.org/settings/keys](https://www.zotero.org/settings/keys)), look for **"Your userID for use in API calls is ..."** at the top. That number is your `library_id`.
-   - Or: go to [zotero.org/settings/storage](https://www.zotero.org/settings/storage) → the number in the URL (`/users/<number>/...`) is your library ID
-
-3. **Library type**: Use `"user"` for your personal library. Use `"group"` if you want to add papers to a group library (you'll need the group's numeric ID instead).
-
-### 4. RAG (optional, recommended)
-
-RAG enables semantic search across your paper notes during `explore` and `experiment`, so the LLM agents see your existing knowledge.
-
-**Library**: [ChromaDB](https://www.trychroma.com/) (local vector database) + [sentence-transformers](https://www.sbert.net/) (embeddings).
-
-```yaml
-rag:
-  dir: "~/.researchbot/rag"              # Where to store the vector index
-  embedding_model: "all-MiniLM-L6-v2"    # sentence-transformers model
-```
-
-**Setup:**
-```bash
-# 1. Install RAG dependencies
-pip install -e ".[rag]"
-
-# 2. Index your existing Obsidian vault (run once, then re-run after manual edits)
-researchbot index
-```
-
-After initial indexing, new notes are **automatically indexed** when created via `record` or `note`.
-
-**How context retrieval works** (during `explore`/`experiment`):
-1. **RAG**: semantic search across all indexed notes (fastest, most relevant)
-2. **Zotero**: keyword search in your Zotero library (catches papers not yet in Obsidian)
-3. **Obsidian**: direct file scan with keyword matching (fallback if RAG is not installed)
-
-### 5. Paper Type Taxonomy (optional)
-
-Customize how papers are classified. Default categories cover systems/ML research:
-
-```yaml
-paper_types:
-  - ANNS
-  - RAG
-  - Diffusion-Language-Model
-  - LLM-Opt
-  - Agentic-OS
-  - KV-Cache
-  - LLM-Security
-  - Memory
-  - Deterministic-LLM
-  - Other
-```
-
-Edit this list in `config.yaml` to add/remove categories. The classifier uses keyword matching + LLM to assign types. Papers are stored in `Papers-<type>/` folders (e.g., `Papers-ANNS/`, `Papers-KV-Cache/`).
-
-### Full config.yaml example
-
-```yaml
-llm:
-  api_key: "sk-proj-abc123..."
-  base_url: ""
-  model: "gpt-4o-mini"
-
-zotero:
-  api_key: "aB1cD2eF3gH4iJ5kL6"
-  library_id: "12345678"
-  library_type: "user"
-
-obsidian:
-  vault_path: "/Users/you/Documents/MyVault"
-
-rag:
-  dir: "~/.researchbot/rag"
-  embedding_model: "all-MiniLM-L6-v2"
-
-paper_types:
-  - ANNS
-  - RAG
-  - Diffusion-Language-Model
-  - LLM-Opt
-  - Agentic-OS
-  - KV-Cache
-  - LLM-Security
-  - Memory
-  - Deterministic-LLM
-  - Other
-```
-
-### Environment Variables (alternative)
-
-Every config field can also be set via env var (takes precedence over config.yaml):
-
-| Env Variable | config.yaml path | Default |
-|---|---|---|
-| `OPENAI_API_KEY` | `llm.api_key` | — |
-| `OPENAI_BASE_URL` | `llm.base_url` | OpenAI default |
-| `RESEARCHBOT_MODEL` | `llm.model` | `gpt-4o-mini` |
-| `RESEARCHBOT_OBSIDIAN_VAULT` | `obsidian.vault_path` | `~/ObsidianVault` |
-| `ZOTERO_API_KEY` | `zotero.api_key` | — |
-| `ZOTERO_LIBRARY_ID` | `zotero.library_id` | — |
-| `ZOTERO_LIBRARY_TYPE` | `zotero.library_type` | `user` |
-| `RESEARCHBOT_RAG_DIR` | `rag.dir` | `~/.researchbot/rag/` |
-| `RESEARCHBOT_RAG_EMBEDDING_MODEL` | `rag.embedding_model` | `all-MiniLM-L6-v2` |
-| `RESEARCHBOT_PAPER_TYPES` | `paper_types` (comma-separated) | See defaults |
-| `SS_API_KEY` | — | — (Semantic Scholar, optional) |
-
----
-
-## Usage
-
-### Record a paper
+### 4. Workspace doctor、更新与 E2E gate
 
 ```bash
-researchbot record https://arxiv.org/abs/2406.12385
-researchbot record https://doi.org/10.1145/1234567
-researchbot record https://arxiv.org/abs/2406.12385 --no-zotero
-researchbot record https://arxiv.org/abs/2406.12385 --vault ~/MyVault
+autoresearch client-skills status --target all
+autoresearch client-skills update --target all
+autoresearch client-skills uninstall --target cursor
+autoresearch doctor
+autoresearch eval
+autoresearch eval --release
 ```
 
-What happens:
-1. Parses URL (arXiv, Semantic Scholar, DOI, generic)
-2. Fetches metadata (title, authors, abstract, year, venue)
-3. Checks Zotero for duplicates, adds if new (with PDF attachment)
-4. Classifies paper type via keyword matching + LLM
-5. Generates structured reading note (problem → importance → method [motivation/challenge/design] → results → summary → limitations → insights)
-6. Writes to Obsidian: `Papers-<paper_type>/<title>.md`
-7. Indexes into RAG
-
-### Create a note
+真实客户端测试通过后，把截图、日志或 Markdown 证据登记为不可替换的 digest receipt：
 
 ```bash
-researchbot note                                    # interactive input
-researchbot note --input my_thoughts.txt            # from file
-researchbot note --type idea                        # force idea type
-echo "What if we..." | researchbot note --type idea # from stdin
+autoresearch e2e record --client claude --skill idea-loop \
+  --model claude-model-name --status pass --evidence ./e2e/claude-idea.md
+
+autoresearch doctor --require-e2e
+autoresearch doctor --release --require-e2e
 ```
 
-Auto-detects whether input is a paper note or research idea. Ideas go to `Idea/`, paper notes go to `Papers-<type>/`.
+没有真实 E2E receipt 时，release gate 会保持失败，不能把本地测试冒充 GPT/Claude/Cursor 验证。
 
-### Explore a research topic
+### 5. 可选的 legacy standalone adapter 模式（已弃用）
+
+对话框之外，仍可以显式选择 command adapter。该兼容接口已弃用，不参与新的 host-native
+能力保证；新工作流应使用 `host begin/check/complete`：
 
 ```bash
-researchbot explore "efficient LLM serving on heterogeneous GPU clusters"
-researchbot explore "vector search indexing" --focus system
-researchbot explore "RAG for code generation" --obsidian
-researchbot explore "multi-agent coordination" --browser
+autoresearch --workspace ./demo run idea \
+  --topic topic.md \
+  --max-rounds 6 --sample-size 3 \
+  --agent-command "my-research-agent --json"
 ```
 
-Pipeline: **Context Retrieval → Ideator → DeepResearcher → Skeptic**
+`idea-scout` 负责文献搜索、问题潜力、baseline、motivation test 与 kill criteria；
+`idea-challenger` 每轮只审核前 `sample-size` 个候选，控制开销。任一方发现需要人为决策的问题，
+或 challenger 接受某个 idea，loop 立即停止。两个角色每轮都会读取当前 `story.md`，并把完整、
+便于人工阅读的故事重新写回该文件；你可以直接修改它，再启动下一次 idea loop。
 
-Output: `explore/<topic>.md` — hypotheses, gap analysis, annotated bibliography, skeptic review.
+Agent command 的协议很小：完整 prompt 从 stdin 输入；stdout 返回一个 JSON object。格式见
+[Architecture](docs/architecture.md)。这是可选兼容模式，不是对话 skills 的执行路径。
 
-### Design experiments
+#### 5.1 冻结故事（legacy）
+
+`idea-loop` 接受后，直接把可编辑的 `story.md` 转换为冻结科研合同：
 
 ```bash
-researchbot experiment "Use HNSW with learned routing to reduce vector search latency by 2x"
-researchbot experiment --obsidian
+autoresearch --workspace ./demo run story \
+  --human-context "只承诺静态查询，不包含 online repair。" \
+  --agent-command "my-research-agent --json"
 ```
 
-Output: `experiments/<idea>.md` — experiment plan, code scaffolds, expected result tables.
+包含 `--human-context` 的 run directive 会被单独记录为一条 Markdown。成功后生成
+`.autoresearch/freezes/paper-story.json`；后续实现和实验每轮前后都会校验它。
 
-### Index vault into RAG
+#### 5.2 实现并冻结核心代码（legacy）
 
 ```bash
-researchbot index                   # index default vault
-researchbot index --vault ~/MyVault # index specific vault
+autoresearch --workspace ./demo run implement \
+  --max-rounds 8 \
+  --check-command "python -m pytest code/tests" \
+  --agent-command "my-coding-agent --json"
 ```
 
----
+只有你通过 `--check-command` 提供的命令会被执行；模型输出中的 shell 文本永远不会被自动执行。
+当 agent 返回 `decision=satisfied`，系统冻结 `code/core/`。
 
-## Obsidian Note Format
-
-All notes use YAML frontmatter for machine-parsability and RAG indexing.
-
-### Paper note (`Papers-<type>/<title>.md`)
-
-```yaml
----
-title: "Fast Graph Vector Search"
-type: paper
-paper_type: VectorSearch
-authors:
-  - Wenqi Jiang
-  - Hang Hu
-year: 2024
-venue: "SIGMOD"
-source_url: "https://arxiv.org/abs/2406.12385"
-zotero_key: "ABC123"
-tags:
-  - vector-search
-  - graph-index
-  - hardware-acceleration
-created_at: 2024-06-18
-updated_at: 2024-06-18
----
-# Fast Graph Vector Search
-## Problem
-## Importance
-## Method
-### Motivation
-### Challenge
-### Design
-## Key Results
-## Summary
-## Limitations
-## Insights for My Research
-## Personal Notes
-```
-
-### Idea note (`Idea/<title>.md`)
-
-```yaml
----
-title: "Speculative Decoding on Heterogeneous GPUs"
-type: idea
-tags:
-  - llm
-  - inference
-created_at: 2024-06-18
-updated_at: 2024-06-18
----
-# Speculative Decoding on Heterogeneous GPUs
-## Hypothesis
-## Motivation
-## Related Directions
-## Open Questions
-## Next Steps
-## Personal Notes
-```
-
----
-
-## Project Structure
-
-```
-researchbot/
-├── cli.py                       # CLI: init, record, note, explore, experiment, index
-├── config.py                    # config.yaml + env var loading
-├── models.py                    # Data models (PaperMetadata, PaperNote, IdeaNote)
-├── agents/                      # LLM agents
-│   ├── ideator.py               # Hypothesis generation, gap analysis
-│   ├── deep_researcher.py       # Literature search, annotated bibliography
-│   ├── skeptic.py               # Adversarial review, feasibility challenge
-│   └── experimenter.py          # Experiment design, code scaffolds
-├── scholar/                     # Paper management
-│   ├── url_parser.py            # URL parsing (arXiv, S2, DOI, generic)
-│   ├── metadata.py              # Metadata fetching (arXiv API, Semantic Scholar)
-│   ├── classifier.py            # Paper type classification (keywords + LLM)
-│   ├── zotero_client.py         # Zotero integration (pyzotero)
-│   ├── note_generator.py        # Structured note generation (LLM)
-│   ├── obsidian_writer.py       # Obsidian vault writing
-│   └── context_retriever.py     # Context retrieval (RAG + Zotero + Obsidian)
-├── orchestrator/
-│   ├── explore.py               # Explore pipeline
-│   └── experiment.py            # Experiment pipeline
-├── tools/
-│   ├── llm.py                   # LLM calls (OpenAI-compatible, retry, cache)
-│   ├── search.py                # ArXiv, Semantic Scholar, DuckDuckGo search
-│   ├── rag.py                   # Local RAG (ChromaDB + sentence-transformers)
-│   ├── io.py                    # File I/O (JSON, YAML, markdown)
-│   ├── browser_llm.py           # Playwright-based ChatGPT automation
-│   └── skills_loader.py         # SKILL.md prompt loader
-└── skills/                      # Agent system prompts (SKILL.md files)
-```
-
----
-
-## Browser Mode
-
-Uses Playwright to automate ChatGPT — no API key required.
+#### 5.3 批量实验（legacy）
 
 ```bash
-researchbot explore "your topic" --browser
+autoresearch --workspace ./demo run experiment \
+  --max-rounds 12 \
+  --run-command "python experiments/scripts/run_batch.py" \
+  --agent-command "my-research-agent --json"
 ```
 
-First run: a Chrome window opens — log in to ChatGPT manually. Session is reused within the same terminal.
+实验 skill 每轮都校验 story 与 core-code 两个 freeze。结论与 prediction 不一致时只能汇报，
+不能改论文或核心代码。
 
-To auto-login with cookies:
+#### 5.4 逐章写作与审稿（legacy）
+
 ```bash
-export EFFICIENT_RESEARCH_COOKIE_FILE="$HOME/cookies_chatgpt.json"
+autoresearch --workspace ./demo run write \
+  --venue "OSDI" --section introduction \
+  --accepted-corpus venue-corpus/osdi-2025 \
+  --agent-command "my-research-agent --json"
+
+autoresearch --workspace ./demo run review \
+  --venue "OSDI" --venue-guide venue/osdi-review.md \
+  --agent-command "my-research-agent --json"
 ```
 
----
+写作只改变表达层 `paper/manuscript/`；`paper/STORY.md` 继续作为不可篡改的科学真值。
 
-## Troubleshooting
+## 可选 OpenAI API adapter（仅 standalone 模式）
 
-| Symptom | Fix |
-|---|---|
-| `OPENAI_API_KEY not set` | Set `llm.api_key` in config.yaml or `export OPENAI_API_KEY="sk-..."` |
-| Zotero skipped | Set `zotero.api_key` and `zotero.library_id` in config.yaml |
-| RAG not working | Run `pip install -e ".[rag]"` then `researchbot index` |
-| Empty metadata | Check URL format; try arXiv abs URL instead of PDF |
-| Browser mode CAPTCHA | Delete `~/.chatgpt-bot-profile` and re-login |
-| Wrong paper classification | Edit `paper_types` in config.yaml, or edit the note manually |
+也可以不写 command adapter，直接使用可选 OpenAI backend：
+
+```bash
+export OPENAI_API_KEY=...
+autoresearch --workspace ./demo run idea \
+  --topic topic.md --openai-model gpt-5.6-terra
+```
+
+当前 adapter 使用 Responses API。它只服务显式的 `autoresearch run`；在 GPT/Claude/Cursor
+对话框触发的六个 skills 不读取 API key，也不经过这个 adapter。
+
+## 设计来源与区别
+
+本项目研究了 Karpathy autoresearch、AI Scientist v1/v2、Agent Laboratory 与
+AI-Research-SKILLs。具体借鉴点、风险边界和链接见 [prior-art.md](docs/prior-art.md)。核心区别是：
+这里的禁止修改、停止条件与记录要求由 Python + 路径 allowlist + 内容哈希执行，而不只依赖 prompt。
+
+## 当前范围
+
+这是可以安装并在三类对话宿主中使用的第一版基础设施。它没有声称已经替你完成某个具体 idea
+的文献检索、实现或大规模实验，也不会把本地 smoke test 当作论文证据。真实运行前，应配置
+计算资源、检索源和 venue corpus，并确认所选对话宿主提供 skill 所需的工具与 sub-agent 能力。

@@ -1,0 +1,12 @@
+{
+  "name": "nextbrain-autoresearch",
+  "version": "0.3.0",
+  "description": "Auditable, freeze-gated research skills executed by the current host conversation model.",
+  "skills": "./src/autoresearch/builtin_skills/",
+  "license": "MIT",
+  "keywords": [
+    "agent-skills",
+    "auto-research",
+    "research"
+  ]
+}
