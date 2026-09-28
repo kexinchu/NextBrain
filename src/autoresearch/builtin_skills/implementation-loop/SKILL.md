@@ -1,7 +1,7 @@
 ---
 name: implementation-loop
 description: Implement the frozen design in a transaction workspace and require a successful human-authorized small-test command before freezing core code.
-version: 0.3.0
+version: 0.4.0
 model: inherit
 ---
 

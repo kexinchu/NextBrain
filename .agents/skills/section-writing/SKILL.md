@@ -1,7 +1,7 @@
 ---
 name: section-writing
 description: Rewrite one section in staging after experiments, with explicit evidence that every frozen claim is preserved and no new claim is introduced.
-version: 0.3.0
+version: 0.4.0
 model: inherit
 ---
 

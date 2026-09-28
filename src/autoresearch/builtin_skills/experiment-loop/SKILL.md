@@ -1,7 +1,7 @@
 ---
 name: experiment-loop
 description: Execute every frozen experiment-matrix cell in staging, preserve provenance, and force a report on contradictions.
-version: 0.3.0
+version: 0.4.0
 model: inherit
 ---
 

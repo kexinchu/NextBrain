@@ -14,3 +14,6 @@ dist/
 # Runtime workspaces and model output are intentionally project-local but untracked.
 .autoresearch/
 runs/
+
+# ResearchOS local catalog, source snapshots and machine inventory.
+.researchos/

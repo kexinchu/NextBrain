@@ -1,7 +1,7 @@
 ---
 name: story-freeze
 description: Draft and explicitly approve a schema-validated paper, design, and experiment contract before content-hash freezing it.
-version: 0.3.0
+version: 0.4.0
 model: inherit
 ---
 

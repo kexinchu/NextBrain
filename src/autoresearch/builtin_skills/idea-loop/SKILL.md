@@ -1,7 +1,7 @@
 ---
 name: idea-loop
 description: Alternate two independent host-native agents under an enforced state machine, challenge a risk-stratified sample, and update story.md.
-version: 0.3.0
+version: 0.4.0
 model: inherit
 ---
 

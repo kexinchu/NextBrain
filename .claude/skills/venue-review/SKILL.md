@@ -1,7 +1,7 @@
 ---
 name: venue-review
 description: Produce a new evidence-grounded venue review in staging, preferably with an independent host-native reviewer subagent.
-version: 0.3.0
+version: 0.4.0
 model: inherit
 ---
 
