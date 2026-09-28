@@ -23,6 +23,8 @@ preserved and are not included in this branch.
   catalog, including prediction, manual run report, artifact copy, finding and contradiction stop.
 - SQLite `integrity_check`: `ok`; `foreign_key_check`: no violations.
 - `autoresearch skills list`: all six existing skills available.
+- Follow-up release audit: package, plugin and skills versions synchronized to 0.4.0;
+  `autoresearch doctor --release` added to CI.
 - Actual upstream decision packet: five candidates detected, each with its linked full plan;
   zero unresolved links. All remain INBOX; no real research idea was approved during development.
 - No remote experiment was executed. Synthetic tests are not scientific results.
@@ -38,7 +40,7 @@ history, experiment edges, artifacts and probe history. Hand-entered results sta
 |---|---|---|
 | cloudsys01.engr.uconn.edu | 2 × NVIDIA RTX A6000, 49,140 MiB each | Python 3.10.12; driver 610.57.04; CUDA toolkit 11.5 reported by nvcc; Git 2.34.1; Docker CLI 29.7.2 |
 | cloudsys02.engr.uconn.edu | 2 × NVIDIA RTX A6000, 49,140 MiB each | Python 3.10.12; driver 610.57.04; nvcc not reported on default PATH; Git 2.34.1; Docker CLI 29.6.0 |
-| kexin-server | No route to host | GPU and environment unknown |
+| kexin-server | User identifies this as the RTX 4060 host; SSH and TCP probe report no route to host | Config confirms kexin@192.168.50.2:22; hardware inventory pending |
 | 6787p | Strict SSH host-key verification failed because the recorded key differs | GPU and environment unknown |
 
 Both A6000 hosts report a driver CUDA UMD version of 13.3, which is distinct from an installed
@@ -48,7 +50,7 @@ Docker CLI availability does not prove daemon access. Default Python 3.10 is bel
 3.11 minimum; suitable project/container interpreters have not yet been selected.
 
 Inventory is stored locally, outside Git. Host-key files, credentials and existing server
-experiments were not changed. The RTX 4060 mapping remains unverified.
+experiments were not changed. The user identifies `kexin-server` as the RTX 4060 machine. The SSH mapping is confirmed; live GPU/environment inventory remains blocked by network reachability.
 
 ## Existing engine components reused
 
@@ -66,7 +68,7 @@ implementation freeze, check receipts and experiment evidence requirements remai
 ## Remaining operational blockers and V0.1
 
 V0 local catalog acceptance passes. Full three-machine environment acceptance is incomplete:
-the 4060 host is not yet identified, and the reachable servers need an appropriate Python
+the identified 4060 host is not reachable, and the reachable servers need an appropriate Python
 runtime and a verified experiment storage location. Changed SSH host keys require independent
 human verification before updating trust records.
 

@@ -20,4 +20,5 @@ jobs:
       - run: python -m pytest
       - run: python -m build
       - run: python -m autoresearch skills list
+      - run: python -m autoresearch doctor --release
       - run: researchos --help
