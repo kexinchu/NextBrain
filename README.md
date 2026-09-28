@@ -283,3 +283,18 @@ AI-Research-SKILLs。具体借鉴点、风险边界和链接见 [prior-art.md](d
 这是可以安装并在三类对话宿主中使用的第一版基础设施。它没有声称已经替你完成某个具体 idea
 的文献检索、实现或大规模实验，也不会把本地 smoke test 当作论文证据。真实运行前，应配置
 计算资源、检索源和 venue corpus，并确认所选对话宿主提供 skill 所需的工具与 sub-agent 能力。
+
+## ResearchOS V0：跨项目研究管理
+
+安装后新增 `researchos` CLI，用于扫描研究计划、记录 GO/HOLD/DROP/NEEDS_WORK、创建项目与合同、
+登记假设和实验依赖、保存运行报告及 Findings Memory，并显式探测 SSH 机器。
+
+```bash
+researchos --home .researchos scan --plans /path/to/plans --source-root /path/to/vault
+researchos --home .researchos inbox
+researchos --home .researchos status
+```
+
+GO 只批准立项；合同按内容哈希单独审批。外部 S1–S4 结果可经明确审批导入 AutoResearch，后续
+story/core 冻结及证据检查继续生效。V0 不运行远程实验，手工导入结果不会被标为已验证。
+完整 CLI、数据格式、恢复方式与 V0.1 边界见 [ResearchOS](docs/researchos.md)。

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nextbrain-autoresearch"
-version = "0.3.0"
+version = "0.4.0"
 description = "Auditable, freeze-gated skills for human-directed auto-research"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -18,6 +18,7 @@ dev = ["build>=1.2", "pytest>=8.0", "ruff>=0.12"]
 
 [project.scripts]
 autoresearch = "autoresearch.cli:main"
+researchos = "researchos.cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
