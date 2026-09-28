@@ -1,5 +1,9 @@
 # ResearchOS V0
 
+> This page documents the original V0 catalog and compatibility commands. For current
+> single-run execution, use [ResearchOS execution](researchos-execution.md). The scope
+> limitations and contract-first sequence below describe V0 only.
+
 ResearchOS adds a cross-project catalog to NextBrain. AutoResearch remains the execution
 engine. Install with `python -m pip install .`; both `researchos` and `autoresearch` are
 included. Python 3.11 or newer is required. No new runtime dependency is added beyond PyYAML.
