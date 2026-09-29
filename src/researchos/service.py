@@ -233,6 +233,9 @@ class ResearchOS:
                 raise ValueError('statement must be text')
             if kind == 'hypothesis':
                 required(data, ('falsification_condition',))
+                from .research_state import HYPOTHESIS_STATES
+                if data.get('state', 'PROPOSED') not in HYPOTHESIS_STATES:
+                    raise ValueError('invalid hypothesis lifecycle state')
         elif kind == 'experiment':
             if 'falsification_condition' in data and 'failure_condition' not in data:
                 data['failure_condition'] = data['falsification_condition']
@@ -298,6 +301,9 @@ class ResearchOS:
             if kind in {'hypothesis', 'claim'}:
                 db.execute(f'INSERT INTO {table} VALUES (?,?,?,?)',
                            (record_id, project_id, encoded(data), utc_stamp()))
+                if kind == 'hypothesis':
+                    db.execute('INSERT INTO hypothesis_states VALUES (?,?,?,?)',
+                               (record_id, data.get('state', 'PROPOSED'), None, utc_stamp()))
             elif kind == 'experiment':
                 db.execute('INSERT INTO experiments VALUES (?,?,?,?,?,?)',
                            (record_id, project_id, data['hypothesis_id'], encoded(data),
@@ -380,6 +386,8 @@ class ResearchOS:
     def handoff(self, project_id: str, story: Path, digest: str, actor: str, reason: str) -> dict:
         from autoresearch.admission import admit_external_idea
 
+        from .controller import check_workspace_story_gate
+        check_workspace_story_gate(self.workspace(project_id))
         project = self.store.get('projects', project_id)
         self.verify_source(project_id)
         _, contract_digest = self.contract(project_id)
@@ -396,6 +404,9 @@ class ResearchOS:
                                        'contract_digest': contract_digest})
 
     def context(self, project_id: str) -> dict:
+        if self.store.list('uncertainties', project_id):
+            from .research_state import build_context
+            return build_context(self, project_id)
         project = self.store.get('projects', project_id)
         path = self.workspace(project_id)
         return {'project': project, 'workspace': str(path),
@@ -422,6 +433,6 @@ class ResearchOS:
                 except (ValueError, RuntimeError, OSError) as exc:
                     frozen[name] = str(exc)
             projects.append({**row, 'workspace': str(path), 'engine_freezes': frozen})
-        return {'schema_version': 2, 'counts': {t: len(self.store.list(t)) for t in sorted(TABLES)},
+        return {'schema_version': 3, 'counts': {t: len(self.store.list(t)) for t in sorted(TABLES)},
                 'projects': projects, 'remote_execution_enabled': True,
-                'execution_mode': 'explicit single-run dispatch; no autonomous multi-run loop'}
+                'execution_mode': 'explicit single-run dispatch or bounded advance (default max_runs=1)'}

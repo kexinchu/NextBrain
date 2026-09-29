@@ -58,6 +58,9 @@ class WorkflowState:
         max_rounds: int = 8,
         sample_size: int = 3,
     ) -> dict:
+        if skill == 'story-freeze':
+            from researchos.controller import check_workspace_story_gate
+            check_workspace_story_gate(self.root)
         state = self.load()
         if state["pending_round"]:
             raise WorkflowError(f"round already pending: {state['pending_round']}")

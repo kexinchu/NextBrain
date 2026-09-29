@@ -5,6 +5,7 @@ import json
 import shlex
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 from .ssh import ALIAS, configuration
@@ -19,7 +20,8 @@ class LocalTransport:
         self.base, self.worker = base.resolve(), worker
 
     def call(self, payload):
-        return invoke([sys.executable, str(self.worker)], {**payload, 'local_base': str(self.base)})
+        return invoke([sys.executable, str(self.worker)], {**payload, 'local_base': str(self.base)},
+                      timeout=control_timeout(self))
 
 
 class SSHTransport:
@@ -42,13 +44,22 @@ class SSHTransport:
                 '-o', 'ForwardX11=no', '-o', 'UpdateHostKeys=no', '-o', 'AddKeysToAgent=no',
                 '-o', 'RemoteCommand=none', '-o', 'RequestTTY=no', '-o', 'Tunnel=no',
                 self.alias, command]
-        return invoke(argv, payload)
+        return invoke(argv, payload, timeout=control_timeout(self))
 
 
-def invoke(argv, payload):
+def control_timeout(transport):
+    timeout = getattr(transport, 'timeout', 45)
+    if hasattr(transport, 'deadline'):
+        timeout = min(timeout, transport.deadline - time.time())
+    if timeout <= 0:
+        raise TransportError('advance wall deadline reached before control call')
+    return timeout
+
+
+def invoke(argv, payload, timeout=45):
     try:
         completed = subprocess.run(argv, input=json.dumps(payload), capture_output=True,
-                                   text=True, timeout=45)
+                                   text=True, timeout=timeout)
     except (subprocess.TimeoutExpired, OSError) as exc:
         raise TransportError(str(exc)) from exc
     if completed.returncode:

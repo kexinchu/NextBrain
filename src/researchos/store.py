@@ -6,7 +6,7 @@ import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
 
-from .schema import SCHEMA_V2
+from .schema import SCHEMA_V2, SCHEMA_V3
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS ideas (
@@ -74,7 +74,9 @@ CREATE TABLE IF NOT EXISTS probes (
 TABLES = frozenset(('ideas', 'revisions', 'decisions', 'projects', 'approvals', 'hypotheses',
                     'claims', 'experiments', 'runs', 'artifacts', 'findings', 'machines', 'probes',
                     'envelopes', 'object_approvals', 'scope_requests', 'experiment_freezes',
-                    'executions', 'run_attempts', 'run_events', 'policy_decisions'))
+                    'executions', 'run_attempts', 'run_events', 'policy_decisions',
+                    'uncertainties', 'planner_proposals', 'planner_decisions', 'research_assessments',
+                    'controller_decisions', 'maturity_gates', 'advances'))
 
 
 def encoded(data) -> str:
@@ -87,11 +89,13 @@ class Store:
         self.root.mkdir(parents=True, exist_ok=True)
         with self.connect() as db:
             version = db.execute('PRAGMA user_version').fetchone()[0]
-            if version not in (0, 1, 2):
+            if version not in (0, 1, 2, 3):
                 raise ValueError(f'unsupported ResearchOS schema version {version}')
             db.executescript(SCHEMA)
             db.executescript(SCHEMA_V2)
-            db.execute('PRAGMA user_version=2')
+            db.executescript(SCHEMA_V3)
+            db.execute("INSERT OR IGNORE INTO hypothesis_states SELECT id,'PROPOSED',NULL,created_at FROM hypotheses")
+            db.execute('PRAGMA user_version=3')
 
     @contextmanager
     def connect(self):
@@ -120,7 +124,9 @@ class Store:
             if project:
                 if table not in {'hypotheses', 'claims', 'experiments', 'runs', 'findings', 'approvals', 'envelopes',
                                   'object_approvals', 'scope_requests', 'experiment_freezes',
-                                  'executions', 'policy_decisions'}:
+                                  'executions', 'policy_decisions', 'uncertainties', 'planner_proposals',
+                                  'planner_decisions', 'research_assessments', 'controller_decisions',
+                                  'maturity_gates', 'advances'}:
                     raise ValueError('this record type has no project filter')
                 rows = db.execute(f'SELECT * FROM {table} WHERE project_id=? ORDER BY rowid',
                                   (project,)).fetchall()
