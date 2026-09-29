@@ -6,6 +6,8 @@ import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
 
+from .schema import SCHEMA_V2
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS ideas (
  id TEXT PRIMARY KEY, title TEXT NOT NULL, current_revision TEXT NOT NULL,
@@ -70,7 +72,9 @@ CREATE TABLE IF NOT EXISTS probes (
 );
 """
 TABLES = frozenset(('ideas', 'revisions', 'decisions', 'projects', 'approvals', 'hypotheses',
-                    'claims', 'experiments', 'runs', 'artifacts', 'findings', 'machines', 'probes'))
+                    'claims', 'experiments', 'runs', 'artifacts', 'findings', 'machines', 'probes',
+                    'envelopes', 'object_approvals', 'scope_requests', 'experiment_freezes',
+                    'executions', 'run_attempts', 'run_events', 'policy_decisions'))
 
 
 def encoded(data) -> str:
@@ -83,10 +87,11 @@ class Store:
         self.root.mkdir(parents=True, exist_ok=True)
         with self.connect() as db:
             version = db.execute('PRAGMA user_version').fetchone()[0]
-            if version not in (0, 1):
+            if version not in (0, 1, 2):
                 raise ValueError(f'unsupported ResearchOS schema version {version}')
             db.executescript(SCHEMA)
-            db.execute('PRAGMA user_version=1')
+            db.executescript(SCHEMA_V2)
+            db.execute('PRAGMA user_version=2')
 
     @contextmanager
     def connect(self):
@@ -113,7 +118,9 @@ class Store:
             raise ValueError('unknown record type')
         with self.connect() as db:
             if project:
-                if table not in {'hypotheses', 'claims', 'experiments', 'runs', 'findings', 'approvals'}:
+                if table not in {'hypotheses', 'claims', 'experiments', 'runs', 'findings', 'approvals', 'envelopes',
+                                  'object_approvals', 'scope_requests', 'experiment_freezes',
+                                  'executions', 'policy_decisions'}:
                     raise ValueError('this record type has no project filter')
                 rows = db.execute(f'SELECT * FROM {table} WHERE project_id=? ORDER BY rowid',
                                   (project,)).fetchall()

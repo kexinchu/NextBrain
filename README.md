@@ -5,6 +5,13 @@
 安装、可在 GPT/Claude/Cursor 对话框直接触发的 skills，并由确定性 Python 状态机约束每轮读什么、
 能改什么、需要什么证据、何时必须停下报告。当前对话中选中的模型就是后台模型；skills 不会偷偷调用第二个模型。
 
+## ResearchOS：可恢复的单次实验
+
+当前执行路径是 `Project Envelope → experiment freeze → run create/dispatch → recover → Finding`。
+运行故障、假设证伪和研究范围变更分别处理；早期实验不需要冻结论文 claim。
+见 [执行指南](docs/researchos-execution.md) 和 [本轮验证报告](docs/researchos-resumable-validation.md)。
+下方六个 skills 保留用于后续论文流程及旧项目兼容。
+
 ## 六个 skills
 
 | Skill | 角色与循环 | 可修改内容 | 必须停止的情况 |

@@ -90,6 +90,8 @@ class ResearchOS:
             if idea is None:
                 raise ValueError('unknown idea')
             project = db.execute('SELECT * FROM projects WHERE idea_id=?', (idea_id,)).fetchone()
+            if decision == 'GO' and project and project['state'] in {'SCOPE_CHANGE_REQUESTED', 'STOPPED'}:
+                raise ValueError('scope or stop gate requires version-bound approval, not another GO')
             if decision == 'GO' and project and project['revision_id'] != idea['current_revision']:
                 raise ValueError('source changed after GO; explicit project revision is required')
             previous = db.execute('SELECT * FROM decisions WHERE idea_id=? ORDER BY rowid DESC LIMIT 1',
@@ -150,6 +152,13 @@ class ResearchOS:
             atomic_write(contract_path, '---\n' + yaml.safe_dump(contract, allow_unicode=True,
                          sort_keys=False) + '---\n\n# Research contract\n\n'
                          'What result would make us abandon this idea?\n')
+        envelope_path = path / 'PROJECT_ENVELOPE.md'
+        if not envelope_path.exists():
+            envelope = {'schema_version': 1, 'project_id': project_id, 'problem': None,
+                        'boundary': None, 'resource_budget': {'gpu_hours': 0, 'cpu_hours': 0},
+                        'stop_conditions': [], 'non_goals': [], 'allowed_experiment_classes': []}
+            atomic_write(envelope_path, '---\n' + yaml.safe_dump(envelope, sort_keys=False)
+                         + '---\n\n# Project Envelope\n')
         ResearchWorkspace(path).init()
         journal = UserMessageJournal(path)
         if not journal.files():
@@ -225,6 +234,8 @@ class ResearchOS:
             if kind == 'hypothesis':
                 required(data, ('falsification_condition',))
         elif kind == 'experiment':
+            if 'falsification_condition' in data and 'failure_condition' not in data:
+                data['failure_condition'] = data['falsification_condition']
             required(data, ('hypothesis_id', 'prediction', 'metrics', 'success_condition',
                             'failure_condition', 'expected_artifacts', 'resource_requirement',
                             'estimated_runtime', 'command_name'))
@@ -296,8 +307,8 @@ class ResearchOS:
             else:
                 db.execute(f'INSERT INTO {table} VALUES (?,?,?,?,?)',
                            (record_id, project_id, data['experiment_id'], encoded(data), utc_stamp()))
-                if kind == 'finding' and data.get('contradicts'):
-                    db.execute("UPDATE projects SET state='NEEDS_REVIEW' WHERE id=?", (project_id,))
+                # Scientific negatives are evidence, not automatic project-scope escalation.
+                # Only an explicit scope request changes the project-level human gate.
         return self.store.get(table, record_id)
 
     def artifact(self, run_id: str, source: Path) -> dict:
@@ -332,6 +343,11 @@ class ResearchOS:
             raise ValueError('approved source snapshot has been modified')
 
     def readiness(self, experiment_id: str) -> dict:
+        with self.store.connect() as db:
+            frozen = db.execute('SELECT 1 FROM experiment_freezes WHERE experiment_id=?', (experiment_id,)).fetchone()
+        if frozen:
+            from .execution import Runs
+            return Runs(self).readiness(experiment_id)
         experiment = self.store.get('experiments', experiment_id)
         project_id = experiment['project_id']
         project = self.store.get('projects', project_id)
@@ -384,10 +400,14 @@ class ResearchOS:
         path = self.workspace(project_id)
         return {'project': project, 'workspace': str(path),
                 'research_contract': (path / 'RESEARCH_CONTRACT.md').read_text(),
+                'project_envelope': (path / 'PROJECT_ENVELOPE.md').read_text()
+                    if (path / 'PROJECT_ENVELOPE.md').exists() else None,
+                'executions': self.store.list('executions', project_id),
                 **{table: self.store.list(table, project_id) for table in
                    ('hypotheses', 'claims', 'experiments', 'runs', 'findings')},
-                'execution': 'Use AutoResearch host transactions and exact story approval. '
-                             'ResearchOS admission does not bypass engine gates.'}
+                'execution': 'Use the approved Project Envelope and experiment-specific freeze for '
+                             'single-run execution. Paper STORY approval is a later, separate gate. '
+                             'Legacy contract/handoff commands remain compatibility tools.'}
 
     def status(self) -> dict:
         from .store import TABLES
@@ -402,5 +422,6 @@ class ResearchOS:
                 except (ValueError, RuntimeError, OSError) as exc:
                     frozen[name] = str(exc)
             projects.append({**row, 'workspace': str(path), 'engine_freezes': frozen})
-        return {'schema_version': 1, 'counts': {t: len(self.store.list(t)) for t in sorted(TABLES)},
-                'projects': projects, 'remote_execution_enabled': False}
+        return {'schema_version': 2, 'counts': {t: len(self.store.list(t)) for t in sorted(TABLES)},
+                'projects': projects, 'remote_execution_enabled': True,
+                'execution_mode': 'explicit single-run dispatch; no autonomous multi-run loop'}

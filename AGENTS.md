@@ -1,4 +1,19 @@
-# AutoResearch repository rules
+# NextBrain repository rules
+
+## ResearchOS experiment execution
+
+Early research execution uses an approved `PROJECT_ENVELOPE.md` and an immutable per-experiment
+snapshot. A final paper claim or `paper/STORY.md` is not an early-execution prerequisite.
+Only dispatch named commands already authorized in `autoresearch.yaml`. Persist the Run ID
+before dispatch; reconcile remote receipts before retrying. Never blindly relaunch LOST jobs.
+Operational failure is not falsification. Valid falsification closes a hypothesis branch and
+keeps the project active unless an approved critical-stop policy applies. Changes to scope,
+question, claim, architecture, evaluation target, baselines or budget require digest-bound
+human approval and a revised envelope. Never manufacture human approval messages.
+See `docs/researchos-execution.md`. These rules govern the new ResearchOS path.
+
+## Legacy paper workflow
+
 
 This repository implements a human-directed research workflow. Before any research round:
 
@@ -7,9 +22,11 @@ This repository implements a human-directed research workflow. Before any resear
    It contains the direction and mirrored session requirements; also verify the immutable
    source messages under `requirements/messages/`.
 3. Verify the relevant content-hash freeze in `.autoresearch/freezes/`.
-4. Write a per-round alignment report under `runs/<round-id>/alignment.md`.
-5. Bind `host begin` to the latest immutable message filename. Write model artifacts only
-   under the returned transaction workspace and create the returned evidence manifest.
+4. Run `autoresearch host next` and follow its playbook. Do not invent a round ID or
+   write `alignment.md`; `host complete` writes that report.
+5. Prefer `host start --inbox <file>` to record the current message and infer the role.
+   Complete or abort a pending round first. Write model artifacts only under the returned
+   transaction workspace and create the returned evidence manifest.
 
 Scientific boundaries:
 

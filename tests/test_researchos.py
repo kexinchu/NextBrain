@@ -175,7 +175,7 @@ def test_failure_evidence_and_contradiction_are_preserved(setup, tmp_path):
         'magnitude': '0%', 'confidence': 'single trace', 'supports': [], 'contradicts': ['C1'],
         'unexpected': True, 'next_questions': []})
     assert json.loads(finding['data'])['verification'] == 'UNVERIFIED'
-    assert app.store.get('projects', project)['state'] == 'NEEDS_REVIEW'
+    assert app.store.get('projects', project)['state'] == 'ACTIVE'
     assert not app.readiness('E1')['specification_ready']
     assert len(app.context(project)['findings']) == 1
 

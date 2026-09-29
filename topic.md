@@ -1073,3 +1073,679 @@ Start by inspecting the repository and V0 implementation. Make changes only afte
 1，环境 4060 的环境是 kexin\@192.168.50.2， 具体配置你在 ssh/config 中能找到
 2，一些旧的 Nextbrain 逻辑可以不要了，因为已经过期了
 3，流程中还有什么可以优化？
+
+### Session requirement 0011
+
+<!-- autoresearch-message:0011-20260928T233931.197018Z.md -->
+- Recorded at: `20260928T233931.197018Z`
+- Source: `user`
+- Immutable record: [`0011-20260928T233931.197018Z.md`](requirements/messages/0011-20260928T233931.197018Z.md)
+
+Continue from the current `master` of `kexinchu/NextBrain`.
+
+PR #2 has already been merged. Do not rebuild ResearchOS V0. Start from the current implementation and refactor toward the first real autonomous execution loop.
+
+The primary objective of this iteration is:
+
+```text
+One experiment
+→ dispatched safely
+→ uniquely identifiable
+→ resumable after disconnect
+→ bounded by timeout/budget
+→ evidence automatically recovered
+→ converted into a Finding
+```
+
+Do not prioritize multi-agent orchestration, paper writing, or large-scale scheduling yet.
+
+## 1. First inspect current master
+
+Before changing anything:
+
+```bash
+cd ~/Github/NextBrain
+git status
+git pull
+git log --oneline -10
+pytest
+ruff check .
+```
+
+Inspect especially:
+
+```text
+src/researchos/
+src/autoresearch/
+tests/test_researchos.py
+docs/researchos.md
+docs/researchos-v0-validation.md
+```
+
+Preserve working V0 functionality unless the architecture below explicitly supersedes it.
+
+---
+
+# 2. Refactor result semantics
+
+Current handling of contradictions is too coarse.
+
+Do not use one generic `contradicts => NEEDS_REVIEW` transition.
+
+Introduce three distinct outcome classes.
+
+## A. Execution failure
+
+Examples:
+
+```text
+process crash
+OOM
+SSH disconnect
+node unavailable
+timeout
+missing dependency
+artifact transfer failure
+```
+
+This is an operational result, not scientific evidence by itself.
+
+Record:
+
+```text
+failure_type
+exit_code
+stderr
+retry_count
+machine
+timestamp
+partial_artifacts
+```
+
+Allow bounded retries according to policy.
+
+Do not mark the research project as scientifically contradicted.
+
+---
+
+## B. Hypothesis falsification
+
+A valid experiment may show that a hypothesis is false.
+
+This is normal research progress.
+
+Create a Finding such as:
+
+```yaml
+outcome: FALSIFIED
+hypothesis_id: H3
+evidence:
+  ...
+```
+
+Then:
+
+```text
+close that hypothesis
+or
+activate another already-approved hypothesis
+or
+generate an in-scope follow-up experiment
+```
+
+Do NOT require human review merely because the result is negative.
+
+---
+
+## C. Research-scope change
+
+Human review is required when evidence suggests changing any of:
+
+```text
+core research question
+primary contribution claim
+approved scope
+compute budget
+fundamental architecture
+evaluation target
+major baseline set
+```
+
+Represent this separately, e.g.:
+
+```text
+SCOPE_CHANGE_REQUESTED
+```
+
+Only this category should trigger project-level Human Gate escalation.
+
+---
+
+# 3. Refactor contract lifecycle
+
+The current contract model freezes too much too early.
+
+Replace the conceptual flow with:
+
+```text
+Human GO
+    ↓
+Project Envelope approved
+    ↓
+S5 hypothesis refinement
+    ↓
+S6 experiment design
+    ↓
+Experiment-specific freeze
+    ↓
+execution
+    ↓
+Finding
+    ↓
+continue within approved scope
+    ↓
+Evidence maturity gate
+    ↓
+Paper STORY freeze
+```
+
+The Human GO / Project Envelope should approve only:
+
+```text
+problem
+research boundary
+resource/compute budget
+stop conditions
+major non-goals
+allowed experiment classes
+```
+
+Do not require a final paper claim at this point.
+
+The project may contain a provisional claim, but it must be explicitly marked provisional.
+
+---
+
+# 4. Experiment Freeze
+
+Before each run, create an immutable experiment snapshot.
+
+It must include:
+
+```yaml
+experiment_id:
+experiment_revision:
+hypothesis_id:
+
+prediction:
+protocol:
+metrics:
+success_condition:
+falsification_condition:
+
+code:
+  repo:
+  commit_sha:
+  dirty: false
+
+data:
+  identifiers:
+  hashes:
+
+environment_requirement:
+
+resource_requirement:
+
+timeout:
+
+budget:
+
+created_at:
+```
+
+Compute a deterministic digest for the entire frozen experiment specification.
+
+Once dispatched, the same Run must always reference that digest.
+
+Do not silently mutate prediction, metric definitions, or success criteria after execution starts.
+
+---
+
+# 5. Implement a real Run object
+
+Every execution must have a unique Run ID.
+
+Example:
+
+```text
+RUN-20260928-0017
+```
+
+A Run must persist before remote execution starts.
+
+Minimum Run state machine:
+
+```text
+CREATED
+    ↓
+PREPARING
+    ↓
+DISPATCHED
+    ↓
+RUNNING
+    ↓
+COLLECTING
+    ↓
+SUCCEEDED
+```
+
+Operational failure branches:
+
+```text
+FAILED_RETRYABLE
+FAILED_FINAL
+TIMED_OUT
+CANCELLED
+LOST
+```
+
+Scientific interpretation must remain separate:
+
+```text
+SUPPORTED
+FALSIFIED
+INCONCLUSIVE
+```
+
+Do not encode scientific interpretation directly into process status.
+
+---
+
+# 6. Executor Receipt
+
+When a run is dispatched, create a durable executor receipt.
+
+It should include at least:
+
+```yaml
+run_id:
+experiment_digest:
+
+machine_alias:
+
+remote_workdir:
+
+remote_pid:
+job_id:
+
+launch_command:
+
+code_commit:
+
+started_at:
+
+stdout_path:
+stderr_path:
+
+artifact_manifest_path:
+```
+
+The receipt must be written locally before considering dispatch successful.
+
+If possible, also write a small receipt on the remote host.
+
+---
+
+# 7. Recovery after SSH disconnect
+
+Implement:
+
+```bash
+researchos run status RUN_ID
+researchos run recover RUN_ID
+```
+
+Recovery must NOT blindly relaunch the experiment.
+
+It should first determine:
+
+```text
+Is remote process still alive?
+Did it finish?
+Did it fail?
+Are artifacts present?
+Was completion recorded remotely?
+```
+
+Only relaunch if policy explicitly permits it and the previous execution is confirmed dead/non-completed.
+
+Prevent duplicate jobs.
+
+---
+
+# 8. Timeout and budget enforcement
+
+Each Run must support:
+
+```text
+wall-clock timeout
+maximum retry count
+GPU-hour budget
+optional disk/artifact limit
+```
+
+Timeout should result in:
+
+```text
+TIMED_OUT
+```
+
+not generic failure.
+
+If project budget is exhausted:
+
+```text
+do not dispatch additional runs
+```
+
+Record a budget-blocked decision.
+
+---
+
+# 9. Preserve partial evidence
+
+Even failed runs may generate useful information.
+
+Always attempt to recover:
+
+```text
+stdout
+stderr
+metrics emitted before failure
+partial result files
+environment snapshot
+GPU utilization logs if available
+```
+
+Hash collected artifacts.
+
+Store them in the existing ResearchOS artifact store.
+
+Do not delete them because the run failed.
+
+---
+
+# 10. First remote target
+
+Prefer the RTX 4060 host when it becomes reachable:
+
+```text
+kexin@192.168.50.2
+```
+
+Use the SSH alias/config from:
+
+```text
+~/.ssh/config
+```
+
+Do not alter credentials or host keys automatically.
+
+If the 4060 remains unreachable, do NOT block the entire implementation.
+
+Use a local mock executor or a safe reachable A6000 host for executor validation, but clearly distinguish test execution from scientific results.
+
+No destructive server cleanup.
+
+---
+
+# 11. Resource-aware execution
+
+Do not hard-code:
+
+```text
+every experiment must pass through 4060
+```
+
+Introduce minimal resource matching.
+
+Experiment requirements may include:
+
+```yaml
+resource:
+  gpu_required: true
+  min_vram_gb: 20
+  gpu_count: 1
+  cpu_only: false
+```
+
+Selection policy:
+
+```text
+CPU-only experiment
+→ local if possible
+
+small GPU experiment
+→ smallest suitable GPU
+
+requires >4060 capability
+→ A6000 directly
+```
+
+4060 is the preferred cheap test machine, not a mandatory gate.
+
+---
+
+# 12. Add prepare-next-experiment
+
+Add a higher-level command similar to:
+
+```bash
+researchos next PROJECT_ID
+```
+
+It should NOT automatically execute.
+
+It should summarize:
+
+```text
+most important unresolved uncertainty
+
+candidate next experiment
+
+why this experiment has high information value
+
+estimated runtime / GPU cost
+
+required machine capability
+
+dependencies satisfied / missing
+
+prediction
+
+success/falsification criteria
+
+whether it stays inside approved project scope
+```
+
+Output one recommended next experiment, not a huge queue.
+
+If scope change is required:
+
+```text
+requires_human_gate: true
+```
+
+---
+
+# 13. Human approval must bind to versioned objects
+
+Existing `--by human` is audit metadata, not real authorization.
+
+For sensitive transitions, create explicit approval receipts bound to object digest/version.
+
+Examples:
+
+```text
+Project Envelope approval
+Experiment exception approval
+Scope-change approval
+Budget increase approval
+```
+
+An approval must become invalid if the approved object's digest changes.
+
+Do not require approval for ordinary in-scope negative experimental results.
+
+---
+
+# 14. Evidence-to-Finding pipeline
+
+After a successful or scientifically valid run:
+
+```text
+Run artifacts
+    ↓
+metrics extraction
+    ↓
+prediction vs observation
+    ↓
+scientific interpretation
+    ↓
+Finding
+```
+
+A Finding should distinguish:
+
+```yaml
+measurement:
+inference:
+outcome:
+confidence:
+supports:
+falsifies:
+unexpected:
+next_questions:
+```
+
+Measurement and inference must remain separate fields.
+
+---
+
+# 15. Stop rules
+
+Implement minimal automatic stop policy.
+
+Examples:
+
+```text
+critical hypothesis falsified
+project compute budget exhausted
+max retry count exceeded
+required baseline unavailable
+experiment cannot produce discriminating evidence
+```
+
+Stopping one hypothesis is not necessarily stopping the entire project.
+
+Project-level stop must be explicit.
+
+---
+
+# 16. Testing requirements
+
+Add tests for at least:
+
+1. run IDs are unique
+2. run persisted before dispatch
+3. experiment digest immutable after dispatch
+4. SSH disconnect does not create duplicate run
+5. recover finds an already-running process
+6. recover collects finished artifacts
+7. timeout produces TIMED_OUT
+8. retry count enforced
+9. execution failure does not mark hypothesis falsified
+10. falsified hypothesis does not mark project NEEDS_REVIEW
+11. scope-change request does require human gate
+12. partial artifacts survive failure
+13. artifact hashes stable
+14. next-experiment refuses out-of-scope change
+15. resource matching selects smallest valid machine
+16. budget prevents new dispatch
+17. approval invalidates when object digest changes
+
+Run:
+
+```bash
+pytest
+ruff check .
+python -m build
+autoresearch doctor --release
+```
+
+Do not accept regressions.
+
+---
+
+# 17. Git workflow
+
+Create a focused branch, for example:
+
+```text
+codex/researchos-resumable-run
+```
+
+Keep commits logically separated where practical:
+
+```text
+refactor: separate execution and scientific outcomes
+
+feat: add resumable run lifecycle
+
+feat: add executor receipts and recovery
+
+feat: add evidence collection
+
+feat: add resource-aware next experiment
+
+test: cover recovery and state transitions
+```
+
+Push the branch and open a PR.
+
+Do not merge automatically unless all tests pass and the diff is internally consistent.
+
+---
+
+# 18. End-of-task report
+
+Return:
+
+```text
+1. architecture changes
+2. schema changes
+3. files added/removed
+4. obsolete paths/modules removed
+5. run state machine
+6. scientific outcome state machine
+7. recovery behavior
+8. timeout/budget behavior
+9. artifact/evidence collection
+10. resource selection behavior
+11. tests
+12. server validation performed
+13. unresolved 4060 connectivity issue
+14. PR URL
+15. recommended next step
+```
+
+The next milestone after this task is:
+
+```text
+real single-run execution
+→ automatic evidence recovery
+→ A6000 promotion/replication
+→ bounded S7 loop
+```
+
+Do not implement autonomous multi-run S7 loops until the single resumable run path is reliable.

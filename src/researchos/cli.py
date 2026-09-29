@@ -40,6 +40,38 @@ def parser() -> argparse.ArgumentParser:
         if name == 'experiment':
             ready = actions.add_parser('ready')
             ready.add_argument('experiment')
+        if name == 'run':
+            create = actions.add_parser('create')
+            create.add_argument('experiment')
+            create.add_argument('--machine')
+            for operation in ('dispatch', 'status', 'recover', 'retry', 'cancel'):
+                op = actions.add_parser(operation)
+                op.add_argument('run_id')
+        if name == 'experiment':
+            freeze = actions.add_parser('freeze')
+            freeze.add_argument('experiment')
+            freeze.add_argument('--repo', type=Path, required=True)
+    next_command = commands.add_parser('next')
+    next_command.add_argument('project')
+    envelope = commands.add_parser('envelope')
+    actions = envelope.add_subparsers(dest='action', required=True)
+    for operation in ('check', 'approve'):
+        op = actions.add_parser(operation)
+        op.add_argument('project')
+        if operation == 'approve':
+            op.add_argument('--digest', required=True)
+            op.add_argument('--message-file', type=Path, required=True)
+            op.add_argument('--by', required=True)
+    scope = commands.add_parser('scope')
+    scope_actions = scope.add_subparsers(dest='action', required=True)
+    scope_request = scope_actions.add_parser('request')
+    scope_request.add_argument('project')
+    scope_request.add_argument('--file', type=Path, required=True)
+    scope_approve = scope_actions.add_parser('approve')
+    scope_approve.add_argument('request_id')
+    scope_approve.add_argument('--digest', required=True)
+    scope_approve.add_argument('--message-file', type=Path, required=True)
+    scope_approve.add_argument('--by', required=True)
     contract = commands.add_parser('contract')
     actions = contract.add_subparsers(dest='action', required=True)
     for name in ('check', 'approve'):
@@ -74,7 +106,34 @@ def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
     try:
         app = ResearchOS(args.home)
-        if args.command == 'scan':
+        if args.command == 'envelope':
+            from .policy import Policy
+            policy = Policy(app)
+            if args.action == 'check':
+                data, digest = policy.envelope_draft(args.project)
+                result = {'envelope': data, 'digest': digest}
+            else:
+                result = policy.approve_envelope(args.project, args.digest, args.message_file, args.by)
+        elif args.command == 'scope':
+            from .policy import Policy
+            if args.action == 'request':
+                result = Policy(app).scope_request(args.project, yaml.safe_load(args.file.read_text()))
+            else:
+                result = Policy(app).approve_scope(args.request_id, args.digest, args.message_file, args.by)
+        elif args.command == 'next':
+            from .next_experiment import prepare_next
+            result = prepare_next(app, args.project)
+        elif args.command == 'run' and args.action not in {'add', 'list'}:
+            from .execution import Runs
+            runs = Runs(app)
+            if args.action == 'create':
+                result = runs.create(args.experiment, args.machine)
+            else:
+                result = getattr(runs, args.action)(args.run_id)
+        elif args.command == 'experiment' and args.action == 'freeze':
+            from .freeze import freeze_experiment
+            result = freeze_experiment(app, args.experiment, args.repo)
+        elif args.command == 'scan':
             result = app.scan(args.plans, args.source_root)
         elif args.command == 'inbox':
             result = app.inbox()
