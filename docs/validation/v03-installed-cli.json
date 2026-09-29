@@ -1,0 +1,13 @@
+{
+  "label": "SYSTEM VALIDATION \u2014 NOT SCIENTIFIC EVIDENCE",
+  "machine": "local",
+  "duplicate_jobs": false,
+  "finding_count": 3,
+  "plan_count": 10,
+  "gpu_execution": false,
+  "intelligence_enabled": true,
+  "single_runs": 1,
+  "bounded_runs": 2,
+  "stop_reason": "STOP_PROJECT: project compute budget exhausted; experiment already attempted; recover existing run or revise proposal; project compute budget exhausted; experiment already attempted; recover existing run or revise proposal; project compute budget exhausted; experiment already attempted; recover existing run or revise proposal; project compute budget exhausted; gate=GATE2-7bea11ca153347d9846c5cec148d3464",
+  "scientific_hypothesis_state": "PROPOSED"
+}

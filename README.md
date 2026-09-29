@@ -5,6 +5,14 @@
 安装、可在 GPT/Claude/Cursor 对话框直接触发的 skills，并由确定性 Python 状态机约束每轮读什么、
 能改什么、需要什么证据、何时必须停下报告。当前对话中选中的模型就是后台模型；skills 不会偷偷调用第二个模型。
 
+## ResearchOS V0.3：研究推理与规划验证
+
+新增研究问题图、假设类型、阻塞性不确定性、oracle / motivation 准入、独立 challenger 提示、
+等级化实验价值、意外结果分支、研究债务、claim 成熟度与研究日志。复用现有冻结与执行链路。
+
+详见 [V0.3 指南](docs/researchos-intelligence.md) 和 [验证报告](docs/researchos-v03-validation.md)。
+真实项目试点需要已有明确 GO；离线回归不会生成科学证据或自动批准项目。
+
 ## ResearchOS V0.2：有界科研循环
 
 在现有可恢复执行器上增加 `uncertainty`、Findings Memory、可审计规划和 `advance`。
