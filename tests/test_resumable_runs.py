@@ -458,7 +458,7 @@ def test_legacy_v1_catalog_migrates_without_losing_imported_records(tmp_path):
     app = ResearchOS(root)
     assert app.inbox()[0]['id'] == 'I-old'
     with app.store.connect() as db:
-        assert db.execute('PRAGMA user_version').fetchone()[0] == 3
+        assert db.execute('PRAGMA user_version').fetchone()[0] == 4
         assert db.execute('PRAGMA integrity_check').fetchone()[0] == 'ok'
 
 
