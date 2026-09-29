@@ -12,6 +12,17 @@ question, claim, architecture, evaluation target, baselines or budget require di
 human approval and a revised envelope. Never manufacture human approval messages.
 See `docs/researchos-execution.md`. These rules govern the new ResearchOS path.
 
+## Bounded research loop
+
+Use the approved envelope and a compact context rebuilt from durable research state on each
+planning iteration. Validate all reasoning proposals before persistence. Freeze only the
+selected experiment with its possible-outcome interpretations. Re-plan after every completed
+run; never dispatch a precomputed sequence. `advance` defaults to one run and preserves its
+original limits on resume. Operational failure and synthetic validation do not change scientific
+belief. Important positive evidence requires independent replication. Scope change and evidence
+maturity use explicit Human Gate #2 decisions. Never write or freeze paper STORY automatically.
+See `docs/researchos-bounded-loop.md` for the reasoner interface and enforced bounds.
+
 ## Legacy paper workflow
 
 

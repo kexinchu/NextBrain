@@ -1,5 +1,8 @@
 # ResearchOS: one resumable experiment
 
+> This is the V0.1 execution primitive, reused by the [V0.2 bounded loop](researchos-bounded-loop.md).
+> Single-run commands remain supported.
+
 This is the execution path after V0. It uses the existing catalog, project workspaces,
 SSH inventory and named command authorization. The control package requires Python 3.11+;
 the dependency-free POSIX worker supports Python 3.10+. There is no autonomous run loop.
