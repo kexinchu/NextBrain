@@ -131,6 +131,8 @@ class Runs:
         spec = verify_frozen(self.app, freeze)
         project = freeze['project_id']
         self.app.verify_source(project)
+        from .intelligence import admit_design
+        admit_design(self.app, project, spec)
         envelope, digest = self.policy.current(project)
         if digest != spec['envelope_digest']:
             raise ValueError('experiment was frozen under a different envelope')
@@ -237,6 +239,8 @@ class Runs:
         # Recheck authorization at dispatch; envelopes can change after run creation.
         envelope, digest = self.policy.current(run['project_id'])
         request = self._request(run)
+        from .intelligence import admit_design
+        admit_design(self.app, run['project_id'], request['snapshot'])
         if digest != request['snapshot']['envelope_digest']:
             raise ValueError('envelope approval changed before dispatch')
         if self.store.get('projects', run['project_id'])['state'] != 'ACTIVE':

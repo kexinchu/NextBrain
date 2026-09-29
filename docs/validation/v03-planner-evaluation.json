@@ -1,0 +1,115 @@
+{
+  "passed": true,
+  "cases": [
+    {
+      "id": "A",
+      "passed": true,
+      "checks": {
+        "selection": true,
+        "bad_choices_excluded": true,
+        "cheap_falsification_considered": true,
+        "type": true
+      },
+      "selected": "E-motivation",
+      "schema_rejections": {},
+      "policy_rejections": [
+        {
+          "candidate_id": "C-E-optimize",
+          "reason": [
+            "explore the mechanism before optimization",
+            "blocking uncertainty: U1",
+            "motivation/oracle opportunity not established: H1"
+          ]
+        }
+      ],
+      "surprise": null,
+      "label": "OFFLINE STRUCTURAL EVALUATION \u2014 NOT SCIENTIFIC EVIDENCE"
+    },
+    {
+      "id": "B",
+      "passed": true,
+      "checks": {
+        "selection": true,
+        "bad_choices_excluded": true,
+        "cheap_falsification_considered": true,
+        "blocked_reason": true
+      },
+      "selected": null,
+      "schema_rejections": {},
+      "policy_rejections": [
+        {
+          "candidate_id": "C-E-implement",
+          "reason": [
+            "upstream hypothesis not established: H1",
+            "motivation/oracle opportunity not established: H1"
+          ]
+        }
+      ],
+      "surprise": null,
+      "label": "OFFLINE STRUCTURAL EVALUATION \u2014 NOT SCIENTIFIC EVIDENCE"
+    },
+    {
+      "id": "C",
+      "passed": true,
+      "checks": {
+        "selection": true,
+        "bad_choices_excluded": true,
+        "cheap_falsification_considered": true,
+        "type": true
+      },
+      "selected": "E-replicate",
+      "schema_rejections": {},
+      "policy_rejections": [
+        {
+          "candidate_id": "C-E-expand",
+          "reason": [
+            "central research debt requires attention: DEBT-0bab2192fe6545449283046e3dd00e57"
+          ]
+        }
+      ],
+      "surprise": null,
+      "label": "OFFLINE STRUCTURAL EVALUATION \u2014 NOT SCIENTIFIC EVIDENCE"
+    },
+    {
+      "id": "D",
+      "passed": true,
+      "checks": {
+        "selection": true,
+        "bad_choices_excluded": true,
+        "cheap_falsification_considered": true,
+        "type": true
+      },
+      "selected": "E-discriminate",
+      "schema_rejections": {
+        "E-benchmark": "correlated performance alone does not test mechanism/causality"
+      },
+      "policy_rejections": [],
+      "surprise": null,
+      "label": "OFFLINE STRUCTURAL EVALUATION \u2014 NOT SCIENTIFIC EVIDENCE"
+    },
+    {
+      "id": "E",
+      "passed": true,
+      "checks": {
+        "selection": true,
+        "bad_choices_excluded": true,
+        "cheap_falsification_considered": true,
+        "surprise": true,
+        "uncertainty_created": true,
+        "prediction_unchanged": true
+      },
+      "selected": "E-surprise",
+      "schema_rejections": {},
+      "policy_rejections": [],
+      "surprise": {
+        "classification": "SURPRISING",
+        "unassessed_metrics": [],
+        "basis": "Only defensible numeric ranges were compared; prose directions without baselines remain unassessed."
+      },
+      "label": "OFFLINE STRUCTURAL EVALUATION \u2014 NOT SCIENTIFIC EVIDENCE"
+    }
+  ],
+  "evaluation_kind": "deterministic structural regression",
+  "external_model_used": false,
+  "limitation": "Checks control and reasoning contracts; does not measure an LLM research-quality gain."
+}

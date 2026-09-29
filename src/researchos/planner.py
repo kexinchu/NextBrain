@@ -16,7 +16,7 @@ from .service import identifier, required, uid
 from .store import encoded
 
 TYPES = {'MOTIVATION', 'FEASIBILITY', 'MECHANISM', 'DISCRIMINATION', 'PRIMARY',
-         'REPLICATION', 'SENSITIVITY', 'ABLATION', 'STRESS'}
+         'REPLICATION', 'SENSITIVITY', 'ABLATION', 'STRESS', 'ORACLE'}
 OUTCOMES = {'SUPPORTED', 'FALSIFIED', 'INCONCLUSIVE', 'OPERATIONAL_FAILURE'}
 
 
@@ -26,7 +26,7 @@ class ResearchReasoner(Protocol):
 
 
 def validate_bundle(app, project, bundle):
-    if not isinstance(bundle, dict) or set(bundle) != {'reasoning_summary', 'candidates'}:
+    if not isinstance(bundle, dict) or not {'reasoning_summary', 'candidates'} <= set(bundle) or set(bundle) - {'reasoning_summary', 'candidates', 'reasoning_cycle'}:
         raise ValueError('planner output requires only reasoning_summary and candidates')
     if not isinstance(bundle['reasoning_summary'], str) or not bundle['reasoning_summary'].strip():
         raise ValueError('reasoning_summary is required')
@@ -35,7 +35,7 @@ def validate_bundle(app, project, bundle):
         raise ValueError('candidate pool must be bounded to 16 (at most four per uncertainty)')
     seen, experiments, groups = set(), set(), {}
     for c in candidates:
-        if not isinstance(c, dict) or set(c) != {
+        if not isinstance(c, dict) or set(c) - {'research'} != {
                 'candidate_id', 'uncertainty_id', 'hypothesis_ids', 'question', 'experiment_type',
                 'mode', 'expected_information', 'possible_outcomes', 'estimated_cost', 'risk',
                 'discrimination_power', 'expected_information_gain', 'feasibility', 'spec', 'repo',
@@ -106,6 +106,8 @@ def validate_bundle(app, project, bundle):
                 raise ValueError('replication must confirm the same hypothesis and frozen criteria')
         elif c['experiment_type'] == 'REPLICATION':
             raise ValueError('replication requires original_run')
+    from .intelligence import validate_research
+    validate_research(app, project, bundle)
     # JSON round trip prevents adapters from retaining mutable aliases; rejects NaN.
     return json.loads(encoded(bundle))
 
@@ -128,14 +130,18 @@ class StoredReasoner:
         rows = self.app.store.list('planner_proposals', self.project)
         if not rows:
             return {'reasoning_summary': 'No research proposals supplied; request a bounded proposal bundle.',
-                    'candidates': []}
+                    'candidates': [],
+                    'reasoning_cycle': {k: 'No proposals or new evidence supplied; request bounded research reasoning.'
+                                        for k in ('observe', 'current_belief', 'uncertain', 'competing_explanations',
+                                                  'change_our_mind', 'cheapest_decisive_experiment', 'predicted_outcomes')}}
         return json.loads(rows[-1]['data'])
 
 
 def effective_spec(candidate):
     return {**candidate['spec'], 'planning': {k: candidate[k] for k in
             ('candidate_id', 'uncertainty_id', 'hypothesis_ids', 'question', 'mode', 'experiment_type',
-             'possible_outcomes', 'expected_information', 'replication_of')}}
+             'possible_outcomes', 'expected_information', 'replication_of')},
+            **({'research_design': candidate['research']} if 'research' in candidate else {})}
 
 
 def candidate_check(app, project, candidate, context):
@@ -185,10 +191,13 @@ def candidate_check(app, project, candidate, context):
     if any(h['state'] in {'FALSIFIED', 'BLOCKED'} and h['id'] in candidate['hypothesis_ids']
            for h in context['hypotheses']):
         blockers.append('candidate targets a closed hypothesis branch')
+    from .intelligence import research_blockers
+    blockers.extend(research_blockers(app, project, candidate, context))
     return {'blockers': blockers, 'within_scope': not scope, 'machine': machine}
 
 
 def plan(app, project, reasoner=None):
+    from .intelligence import active, ordinal_value
     Runs(app)  # Ensure the known local capability exists before computing a state digest.
     context = build_context(app, project)
     reasoner = reasoner or StoredReasoner(app, project)
@@ -211,9 +220,12 @@ def plan(app, project, reasoner=None):
         score = (components['importance'] * components['discrimination_power'] *
                  components['expected_information_gain'] * components['feasibility'] *
                  components['type_weight'] / components['normalized_cost'])
-        scores.append({'candidate': c, 'score': score, 'components': components, **check})
+        ordinal = ordinal_value(c, u) if active(app, project) else None
+        scores.append({'candidate': c, 'score': ordinal['band'] if ordinal else score,
+                       'components': ordinal['components'] if ordinal else components,
+                       'ordinal': ordinal, **check})
     ready = [s for s in scores if not s['blockers']]
-    selected = max(ready, key=lambda s: (s['score'], s['candidate']['candidate_id'])) if ready else None
+    selected = max(ready, key=lambda s: (s['ordinal']['rank'] if s['ordinal'] else (s['score'],), s['candidate']['candidate_id'])) if ready else None
     # Only expose the small competing set for the selected uncertainty; retain rejected scores in audit.
     uncertainty = selected['candidate']['uncertainty_id'] if selected else None
     decision = {'project_id': project, 'research_state_digest': context['research_state_digest'],
@@ -222,10 +234,12 @@ def plan(app, project, reasoner=None):
                                           if s['candidate']['uncertainty_id'] == uncertainty],
                 'selected_experiment': selected['candidate']['spec']['id'] if selected else None,
                 'selected': selected, 'selection_scores': scores,
-                'reasoning_summary': bundle['reasoning_summary'],
-                'selection_explanation': 'Heuristic information/discrimination per conservative runtime cost; not a probability.',
+                'reasoning_summary': bundle['reasoning_summary'], 'reasoning_cycle': bundle.get('reasoning_cycle'),
+                'reasoner_calls': getattr(reasoner, 'audit', []),
+                'selection_explanation': ('Ordinal ranking of upstream need, uncertainty, risk and value components.' if active(app, project) else
+                                          'Heuristic information/discrimination per conservative runtime cost; not a probability.'),
                 'rejected_candidates': [{'candidate_id': s['candidate']['candidate_id'],
-                    'reason': s['blockers'] or ['Lower information/cost score']} for s in scores if s is not selected],
+                    'reason': s['blockers'] or ['Lower ordinal priority' if active(app, project) else 'Lower information/cost score']} for s in scores if s is not selected],
                 'scope_check': all(s['within_scope'] for s in scores),
                 'budget_snapshot': context['budget'], 'will_execute': False,
                 'ready': selected is not None, 'created_at': utc_stamp()}

@@ -91,6 +91,8 @@ def freeze_experiment(app, experiment_id, repo: Path):
     spec = json.loads(row['data'])
     spec.setdefault('falsification_condition', spec['failure_condition'])
     validate_protocol(spec)
+    from .intelligence import admit_design
+    admit_design(app, project, spec)
     blockers = policy.scope_blockers(envelope, spec)
     if blockers:
         raise ValueError('; '.join(blockers))

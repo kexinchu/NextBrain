@@ -65,10 +65,21 @@ Engineering boundaries:
   in `autoresearch.yaml`.
 - Keep provider adapters small and optional; skills must remain vendor-neutral.
 
+ResearchOS V0.3:
+
+- Register a core question matching the approved envelope to enable typed research designs.
+- Treat ordinal values and graph relations as reasoning aids, never scientific evidence.
+- Preserve frozen predictions; unexpected scientific results create in-scope uncertainty.
+- Keep challenger prompts separate and record their outputs before central experiments.
+- Repair central research debt before unrelated expansion; literature questions do not expand scope.
+- A real pilot requires an explicit existing GO decision. Pursue recommendations are insufficient.
+- Offline reasoning cases use simulated state and must never be reported as scientific validation.
+
 Verification:
 
 ```bash
 python -m pytest
 python -m build
+python -m researchos evaluate-planner --cases evaluations/research_planner_cases.json
 python -m autoresearch skills list
 ```

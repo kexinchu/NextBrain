@@ -21,6 +21,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--root', type=Path, required=True)
     parser.add_argument('--machine', default='local')
+    parser.add_argument('--intelligence', action='store_true', help='Enable V0.3 research design contracts')
     args = parser.parse_args()
     root = args.root.resolve()
     root.mkdir(parents=True, exist_ok=False)
@@ -57,7 +58,12 @@ def main():
     (workspace / 'autoresearch.yaml').write_text(yaml.safe_dump({'version': 1, 'commands': {
         'fixture': {'skill': 'experiment-loop', 'argv': ['python3', 'fixture.py'], 'timeout': 10}}}))
     app.add('hypothesis', project, {'id': 'H1', 'statement': 'Synthetic value reaches fixture threshold',
-                                  'falsification_condition': 'Synthetic value below threshold'})
+                                  'falsification_condition': 'Synthetic value below threshold',
+                                  **({'hypothesis_type': 'PERFORMANCE'} if args.intelligence else {})})
+    if args.intelligence:
+        from researchos.intelligence import set_question
+        set_question(app, project, {'id': 'Q1', 'question': envelope['problem'],
+                                   'motivation_hypotheses': [], 'oracle_hypotheses': []})
     if args.machine != 'local':
         import_config(app.store, Path.home() / '.ssh/config')
         inventory = probe(app.store, args.machine)
@@ -96,9 +102,17 @@ def main():
             'estimated_cost': 1, 'risk': 'Ten-second bounded CPU job', 'discrimination_power': .5,
             'expected_information_gain': .5, 'feasibility': 1, 'spec': spec, 'repo': str(repo),
             'machine': args.machine, 'replication_of': None})
+    if args.intelligence:
+        from researchos.reasoning_eval import fixture_candidate
+        from researchos.intelligence import CYCLE_FIELDS
+        for candidate in candidates:
+            candidate['research'] = fixture_candidate(repo, {'id': candidate['spec']['id'],
+                'hypothesis': 'H1', 'uncertainty': 'U1', 'type': 'FEASIBILITY',
+                'strategy': 'MEASUREMENT', 'cheap': True})['research']
     proposal = root / 'proposals.json'
     proposal.write_text(json.dumps({'reasoning_summary': 'SYSTEM VALIDATION; curated fixture pool, no scientific reasoning.',
-                                   'candidates': candidates}, indent=2))
+                                   'candidates': candidates, **({'reasoning_cycle': {k: 'Synthetic fixture only: ' + k for k in CYCLE_FIELDS}}
+                                            if args.intelligence else {})}, indent=2))
     cli('planner', 'import', project, '--file', str(proposal))
     before = cli('next', project)
     assert before['ready'] and not app.store.list('executions', project)
@@ -123,7 +137,7 @@ def main():
               'finding_count': len(app.store.list('findings', project)),
               'plan_count': len(app.store.list('planner_decisions', project)),
               'budget': context['budget'], 'scientific_state': context['hypotheses'],
-              'gpu_execution': False}
+              'gpu_execution': False, 'intelligence_enabled': args.intelligence}
     (root / 'report.json').write_text(json.dumps(report, indent=2))
     print(json.dumps(report, indent=2))
 

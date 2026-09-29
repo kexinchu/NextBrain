@@ -24,7 +24,8 @@ def enable(app, project):
 def add_uncertainty(app, project, data):
     if not isinstance(data, dict) or set(data) - {
             'id', 'question', 'related_hypotheses', 'importance', 'current_evidence', 'status',
-            'why_it_matters', 'threats_to_validity'}:
+            'why_it_matters', 'threats_to_validity', 'blocks', 'decision_relevance',
+            'current_uncertainty', 'risk_to_project', 'origin_finding'}:
         raise ValueError('invalid uncertainty schema')
     required(data, ('id', 'question', 'related_hypotheses', 'importance', 'why_it_matters'))
     identifier(data['id'])
@@ -39,6 +40,14 @@ def add_uncertainty(app, project, data):
         app.same_project('hypotheses', h, project)
     for f in strings(data.get('current_evidence', []), 'current_evidence'):
         app.same_project('findings', f, project)
+    from .intelligence import node
+    for target in data.get('blocks', []):
+        node(app, project, target)
+    for key in ('decision_relevance', 'current_uncertainty', 'risk_to_project'):
+        if data.get(key, 'HIGH') not in {'HIGH', 'MEDIUM', 'LOW'}:
+            raise ValueError('invalid ordinal uncertainty field: ' + key)
+    if data.get('origin_finding'):
+        app.same_project('findings', data['origin_finding'], project)
     state = data.get('status', 'OPEN')
     if state not in UNCERTAINTY_STATES:
         raise ValueError('invalid uncertainty status')
@@ -57,7 +66,8 @@ def scientific(finding):
 def build_context(app, project, limit=80):
     envelope, envelope_digest = Policy(app).current(project)
     tables = ('hypotheses', 'claims', 'experiments', 'executions', 'findings', 'uncertainties',
-              'research_assessments', 'planner_proposals', 'scope_requests', 'object_approvals')
+              'research_assessments', 'planner_proposals', 'scope_requests', 'object_approvals',
+              'research_questions', 'research_edges', 'research_debt', 'intelligence_notes')
     rows = {table: app.store.list(table, project) for table in tables}
     rows['object_approvals'] = [r for r in rows['object_approvals'] if not r['kind'].startswith('gate:')]
     machines = app.store.list('machines')
@@ -73,6 +83,13 @@ def build_context(app, project, limit=80):
                               'source_revision': app.store.get('ideas', project_row['idea_id'])['current_revision'],
                               'command_config': sha256_file(config) if config.exists() else None})
     findings = [json.loads(r['data']) for r in rows['findings']]
+    central = {r['id'] for r in rows['hypotheses'] if json.loads(r['data']).get('critical')}
+    findings = sorted(enumerate(findings), key=lambda pair: (
+        scientific(pair[1]), pair[1].get('outcome') == 'FALSIFIED',
+        pair[1].get('hypothesis_id') in central, pair[1].get('unexpected') is True, pair[0]), reverse=True)
+    findings = [f for _, f in findings]
+    rows['uncertainties'].sort(key=lambda r: (not bool(json.loads(r['data']).get('blocks')),
+          json.loads(r['data']).get('importance') != 'HIGH', r['id']))
     assessments = {r['id']: json.loads(r['data']) for r in rows['research_assessments']}
     hypotheses = []
     for row in rows['hypotheses']:
@@ -93,7 +110,8 @@ def build_context(app, project, limit=80):
             state = 'FALSIFIED'
         hypotheses.append({'id': row['id'], 'statement': h['statement'], 'state': state,
                            'critical': h.get('critical', False), 'confidence': confidence,
-                           'supporting_findings': positive[-limit:], 'contradicting_findings': negative[-limit:],
+                           'hypothesis_type': h.get('hypothesis_type', 'UNCLASSIFIED'),
+                           'supporting_findings': positive[:limit], 'contradicting_findings': negative[:limit],
                            'evidence_counts': dict(Counter(f.get('outcome') for f in relevant)),
                            'open_uncertainties': [r['id'] for r in rows['uncertainties']
                               if r['status'] in {'OPEN', 'REDUCED'} and row['id'] in
@@ -106,8 +124,8 @@ def build_context(app, project, limit=80):
                'uncertainties': [{**json.loads(r['data']), 'status': r['status']}
                                  for r in rows['uncertainties'][:limit]],
                'findings': [{k: f.get(k) for k in ('id', 'hypothesis_id', 'experiment_id', 'outcome',
-                            'measurement', 'inference', 'unexpected', 'verification', 'evidence_kind')}
-                            for f in findings[-limit:]],
+                            'measurement', 'inference', 'unexpected', 'verification', 'evidence_kind', 'surprise')}
+                            for f in findings[:limit]],
                'claims': [json.loads(r['data']) for r in rows['claims'][:limit]],
                'experiments': [{'id': r['id'], 'hypothesis_id': r['hypothesis_id'],
                     'dependencies': json.loads(r['data']).get('dependencies', [])}
@@ -122,6 +140,11 @@ def build_context(app, project, limit=80):
                                                              for k, v in reserved.items()},
                           'accounting': 'Conservative reservations; not measured compute consumption'},
                'truncated': {k: len(v) - limit for k, v in rows.items() if len(v) > limit}}
+    context['question_graph'] = {'questions': [json.loads(r['data']) for r in rows['research_questions']],
+                                 'edges': [json.loads(r['data']) for r in rows['research_edges'][:limit]]}
+    context['research_debt'] = [{**json.loads(r['data']), 'id': r['id'], 'status': r['status']}
+                                for r in rows['research_debt'] if r['status'] == 'OPEN'][:limit]
+    context['recent_reasoning'] = [json.loads(r['data']) for r in rows['intelligence_notes'][-min(limit, 8):]]
     # Hard prompt size cap: never silently feed an unbounded database to a reasoner.
     if len(encoded(context).encode()) > 65536:
         if limit > 5:

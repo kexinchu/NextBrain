@@ -2976,3 +2976,1203 @@ artifact integrity
 ```
 
 unless there is
+
+### Session requirement 0013
+
+<!-- autoresearch-message:0013-20260929T025706.273780Z.md -->
+- Recorded at: `20260929T025706.273780Z`
+- Source: `user`
+- Immutable record: [`0013-20260929T025706.273780Z.md`](requirements/messages/0013-20260929T025706.273780Z.md)
+
+# ResearchOS V0.3 — Research Intelligence + Real-Project Pilot
+
+Continue from the current merged `master` of:
+
+```text
+~/Github/NextBrain
+```
+
+Repository:
+
+```text
+git@github.com:kexinchu/NextBrain.git
+```
+
+Previous milestones are complete.
+
+ResearchOS already provides:
+
+```text
+S1-S4 external idea discovery
+        ↓
+Human Gate #1
+        ↓
+Project Envelope
+        ↓
+Hypotheses + Uncertainties
+        ↓
+Auditable Planner
+        ↓
+Candidate Experiments
+        ↓
+Experiment Freeze
+        ↓
+Bounded advance loop
+        ↓
+Recoverable execution
+        ↓
+Evidence / Findings
+        ↓
+Hypothesis updates
+        ↓
+Replication
+        ↓
+Human Gate #2
+```
+
+The previous implementation passed:
+
+```text
+121 tests
+Ruff
+build
+installed CLI
+release doctor
+```
+
+and completed real system validation on `cloudsys01`:
+
+```text
+1 run
+→ 2 bounded runs
+→ budget exhaustion
+→ clean stop
+```
+
+with:
+
+```text
+3 Findings
+10 planning records
+no duplicate jobs
+```
+
+All were synthetic CPU validation and correctly excluded from scientific evidence.
+
+Do NOT redesign these mechanisms.
+
+---
+
+# 1. Objective
+
+The primary problem is no longer execution infrastructure.
+
+The major remaining weakness is **research intelligence**.
+
+ResearchOS can execute experiments reliably, but it must become better at:
+
+```text
+forming useful hypotheses
+
+identifying decisive uncertainties
+
+designing discriminating experiments
+
+reasoning about expected outcomes before execution
+
+interpreting unexpected results
+
+deciding whether to replicate, branch, falsify, or escalate
+
+distinguishing scientific progress from metric hill climbing
+```
+
+The goal of V0.3 is:
+
+> Build a research-reasoning layer that proposes and evaluates experiments like a careful systems researcher, while leaving deterministic safety, execution, scope, budget, provenance and approvals to the existing ResearchOS control plane.
+
+---
+
+# 2. Architectural principle
+
+Maintain a strict separation:
+
+```text
+              Research Intelligence
+                      │
+       ┌──────────────┼──────────────┐
+       ▼              ▼              ▼
+ Hypothesis       Experiment       Result
+ Reasoning         Design       Interpretation
+       │              │              │
+       └──────────────┼──────────────┘
+                      ▼
+              Structured Proposal
+                      │
+                      ▼
+             Deterministic ResearchOS
+                      │
+       ┌──────────────┼──────────────┐
+       ▼              ▼              ▼
+     scope          budget         policy
+     check          check          check
+       │
+       └──────────────┼──────────────┘
+                      ▼
+                Experiment Freeze
+                      │
+                      ▼
+                  Executor
+```
+
+The reasoning layer proposes.
+
+The deterministic layer decides whether the proposal is admissible.
+
+Never allow the reasoning model to bypass:
+
+```text
+scope
+budget
+approval
+freeze
+provenance
+resource
+artifact
+execution
+```
+
+rules.
+
+---
+
+# 3. Introduce Research Question Graph
+
+Flat hypotheses are not enough.
+
+Represent the current scientific reasoning structure explicitly.
+
+Add a Research Question Graph.
+
+Conceptually:
+
+```text
+Core Question
+     │
+     ├── H1
+     │    ├── U1
+     │    └── U2
+     │
+     ├── H2
+     │    └── U3
+     │
+     └── H3
+          ├── U4
+          └── U5
+```
+
+Support relationships such as:
+
+```text
+SUPPORTS
+CONTRADICTS
+DEPENDS_ON
+ALTERNATIVE_TO
+EXPLAINS
+REFINES
+```
+
+Do not build a general-purpose graph database.
+
+SQLite relational representation is sufficient.
+
+The purpose is scientific traceability, not graph infrastructure.
+
+---
+
+# 4. Distinguish hypothesis classes
+
+Introduce semantic hypothesis types.
+
+At minimum:
+
+```text
+EXISTENCE
+MECHANISM
+CAUSAL
+PERFORMANCE
+BOUNDARY
+GENERALIZATION
+```
+
+Examples:
+
+```text
+EXISTENCE:
+Reuse skew exists in realistic workloads.
+
+MECHANISM:
+Reuse skew is caused by shared prefixes.
+
+PERFORMANCE:
+Selective placement reduces TTFT.
+
+BOUNDARY:
+The benefit disappears below 60% prediction precision.
+
+GENERALIZATION:
+The mechanism persists across model families.
+```
+
+Experiment design should depend on hypothesis type.
+
+A performance benchmark is not automatically a valid test of a mechanism hypothesis.
+
+---
+
+# 5. Competing hypotheses
+
+ResearchOS must explicitly support competing explanations.
+
+Example:
+
+```text
+Observed:
+TTFT improves.
+
+Possible explanations:
+
+H1:
+HBF placement reduced transfer traffic.
+
+H2:
+Batch composition changed.
+
+H3:
+Cache hit rate changed for unrelated reasons.
+
+H4:
+Measurement noise.
+```
+
+The planner should prefer experiments that discriminate among plausible explanations.
+
+Introduce explicit:
+
+```text
+competing_hypotheses
+```
+
+or graph relation:
+
+```text
+ALTERNATIVE_TO
+```
+
+Do not let the system immediately interpret a metric improvement as proof of the intended mechanism.
+
+---
+
+# 6. Research reasoning cycle
+
+For each planning iteration, reasoning should follow:
+
+```text
+OBSERVE
+   ↓
+WHAT DO WE CURRENTLY BELIEVE?
+   ↓
+WHAT IS UNCERTAIN?
+   ↓
+WHAT ARE THE COMPETING EXPLANATIONS?
+   ↓
+WHAT RESULT WOULD CHANGE OUR MIND?
+   ↓
+WHAT IS THE CHEAPEST DECISIVE EXPERIMENT?
+   ↓
+PREDICT OUTCOMES
+   ↓
+EXECUTE
+   ↓
+COMPARE OBSERVATION TO PREDICTION
+   ↓
+UPDATE RESEARCH STATE
+```
+
+Make this structure explicit in planner records.
+
+---
+
+# 7. Improve uncertainty prioritization
+
+Do not prioritize uncertainties only by static importance.
+
+Consider:
+
+```text
+decision relevance
+scientific importance
+downstream dependency
+current uncertainty
+discrimination potential
+cost to resolve
+risk of invalidating project
+```
+
+Especially prioritize **upstream uncertainties**.
+
+Example:
+
+```text
+U1:
+Does the phenomenon exist?
+
+U2:
+Which scheduling policy is optimal?
+```
+
+U1 should dominate U2.
+
+Do not optimize implementation details before establishing the premise.
+
+---
+
+# 8. Introduce blocking uncertainty
+
+Allow uncertainties to block downstream work.
+
+Example:
+
+```text
+U1: Is reuse sufficiently skewed?
+    status = OPEN
+    blocks = [H3, H4, E10-E30]
+```
+
+If U1 is unresolved:
+
+```text
+do not spend large compute optimizing placement policy
+```
+
+This should be enforced by planner policy.
+
+---
+
+# 9. Improve candidate experiment generation
+
+For every important uncertainty, candidate generation should consider different experimental strategies.
+
+Examples:
+
+```text
+measurement
+controlled intervention
+oracle experiment
+counterfactual
+ablation
+stress test
+trace analysis
+microbenchmark
+end-to-end benchmark
+replication
+```
+
+Require at least one candidate to be a **cheap falsification attempt** when appropriate.
+
+Ask:
+
+> What is the cheapest experiment that could kill this hypothesis?
+
+before:
+
+> What is the full experiment proving it?
+
+---
+
+# 10. Introduce Oracle Experiments
+
+Systems research often benefits from oracle upper bounds.
+
+Support experiment type:
+
+```text
+ORACLE
+```
+
+Example:
+
+```text
+Before implementing a sophisticated reuse predictor:
+
+Assume perfect reuse prediction.
+
+Measure the maximum possible benefit.
+```
+
+If oracle improvement is negligible:
+
+```text
+STOP implementation work
+```
+
+This should be a preferred early-stage experiment when applicable.
+
+---
+
+# 11. Motivation gates
+
+Before expensive implementation, require motivation evidence when relevant.
+
+Conceptually:
+
+```text
+Problem magnitude
+       ↓
+Oracle opportunity
+       ↓
+Mechanism feasibility
+       ↓
+Prototype
+       ↓
+End-to-end evaluation
+```
+
+Planner should penalize:
+
+```text
+complex implementation
+```
+
+when:
+
+```text
+problem magnitude
+```
+
+or:
+
+```text
+oracle opportunity
+```
+
+has not been established.
+
+---
+
+# 12. Experiment value model
+
+Refine the current heuristic.
+
+Candidate value should conceptually consider:
+
+```text
+Value(E) =
+
+decision_relevance
+× uncertainty_reduction
+× discrimination_power
+× downstream_unlock_value
+× feasibility
+
+--------------------------------
+
+compute_cost
+× implementation_cost
+× execution_risk
+```
+
+Do NOT claim mathematical precision.
+
+Store components separately.
+
+Example:
+
+```yaml
+decision_relevance: HIGH
+uncertainty_reduction: HIGH
+discrimination_power: MEDIUM
+downstream_unlock_value: HIGH
+
+compute_cost: LOW
+implementation_cost: LOW
+execution_risk: LOW
+```
+
+Then derive an ordinal ranking.
+
+Avoid fake decimal precision such as:
+
+```text
+score = 0.873421
+```
+
+unless genuinely computed from calibrated quantities.
+
+---
+
+# 13. Prediction quality
+
+Before execution, require more than:
+
+```text
+metric should improve
+```
+
+Prediction should include:
+
+```text
+direction
+expected magnitude/range when defensible
+mechanistic reason
+boundary conditions
+what outcome would surprise us
+what outcome falsifies the hypothesis
+```
+
+Example:
+
+```yaml
+prediction:
+
+  expected:
+    TTFT:
+      direction: decrease
+      approximate_range: 10-20%
+
+  mechanism:
+    fewer repeated HBM transfers
+
+  boundary:
+    benefit should disappear when reuse < 1.2x
+
+  surprising_result:
+    TPOT increases >10%
+
+  falsification:
+    oracle placement improves TTFT <2%
+```
+
+---
+
+# 14. Surprise detection
+
+After execution, compare:
+
+```text
+prediction
+vs
+observation
+```
+
+Explicitly classify:
+
+```text
+EXPECTED
+PARTIALLY_EXPECTED
+SURPRISING
+STRONGLY_CONTRADICTORY
+```
+
+A surprising result should not automatically be treated as failure.
+
+It may create a new uncertainty.
+
+Example:
+
+```text
+Expected:
+TTFT improves.
+
+Observed:
+TTFT unchanged,
+TPOT improves significantly.
+
+→ create new uncertainty:
+Why did TPOT improve instead?
+```
+
+---
+
+# 15. Unexpected-result branching
+
+Allow Findings to create:
+
+```text
+new in-scope uncertainty
+```
+
+or:
+
+```text
+new sub-hypothesis
+```
+
+without Human Gate if and only if:
+
+```text
+it remains inside Project Envelope
+does not materially expand budget
+does not change core research question
+```
+
+Example:
+
+```text
+Finding F31
+    ↓
+unexpected behavior
+    ↓
+U22
+    ↓
+H7
+    ↓
+cheap discrimination experiment
+```
+
+This is a core auto-research capability.
+
+---
+
+# 16. Anti-confirmation-bias mechanism
+
+Before executing a central claim experiment, require a challenger pass.
+
+The challenger should ask:
+
+```text
+What alternative explanation fits the same evidence?
+
+What confounder could produce this result?
+
+What baseline would make the proposed contribution disappear?
+
+What experiment could falsify our preferred explanation?
+
+Are we measuring the mechanism or merely correlated performance?
+```
+
+Store the challenge.
+
+Do not require a separate LLM if the current reasoning adapter can produce an independently prompted challenger output.
+
+---
+
+# 17. Research debt
+
+Introduce lightweight Research Debt tracking.
+
+Examples:
+
+```text
+missing baseline
+
+unreplicated central result
+
+unexplained anomaly
+
+unverified workload realism
+
+weak motivation evidence
+
+missing sensitivity test
+
+measurement instability
+```
+
+Debt should affect planning.
+
+Example:
+
+```text
+central result exists
+but no replication
+
+→ replication debt HIGH
+
+→ prioritize replication
+```
+
+Do not allow dozens of new experiments while central research debt accumulates.
+
+---
+
+# 18. Evidence maturity
+
+Define evidence maturity for major claims.
+
+Example:
+
+```text
+LEVEL 0 — hypothesis only
+
+LEVEL 1 — motivation evidence
+
+LEVEL 2 — preliminary experiment
+
+LEVEL 3 — replicated
+
+LEVEL 4 — mechanism isolated
+
+LEVEL 5 — sensitivity/boundary established
+
+LEVEL 6 — end-to-end validated
+```
+
+Do not assume every claim needs every level.
+
+Make maturity requirements claim-specific.
+
+This will later drive paper readiness.
+
+---
+
+# 19. Human Gate #2 improvement
+
+Upgrade Gate #2 into a research review rather than a simple status summary.
+
+It should answer:
+
+```text
+What did we originally believe?
+
+What do we believe now?
+
+Which hypotheses survived?
+
+Which were falsified?
+
+What surprised us?
+
+What is the strongest evidence?
+
+What is still weak?
+
+Which research debt remains?
+
+What experiments changed our understanding most?
+
+How much compute was consumed?
+
+What is the remaining opportunity?
+
+Is there enough evidence to define a paper story?
+```
+
+Suggested actions:
+
+```text
+CONTINUE_EXPLORATION
+FOCUS_MECHANISM
+REPLICATE
+EXPAND_EVALUATION
+STOP_PROJECT
+REQUEST_SCOPE_CHANGE
+FREEZE_STORY
+```
+
+Human makes the final Gate #2 decision.
+
+---
+
+# 20. Real-project pilot
+
+After implementation and synthetic validation, perform the first real-project **planning pilot**.
+
+Do NOT automatically launch expensive scientific experiments.
+
+Use one existing research seed from the user's upstream plan directory:
+
+```text
+/Users/kexin.chu/Github/paper-manager/Ideas/Research-Map/plans/
+```
+
+Choose only an idea already marked GO.
+
+If no real idea is GO:
+
+```text
+STOP
+```
+
+and report that Human Gate #1 is required.
+
+Never convert upstream ranking/recommendation into GO automatically.
+
+---
+
+# 21. For the pilot, run S5/S6 deeply
+
+For the selected GO project:
+
+construct:
+
+```text
+Core Question
+
+Project Envelope
+
+Research Question Graph
+
+Hypotheses
+
+Competing Hypotheses
+
+Uncertainties
+
+Blocking Uncertainties
+
+Candidate Experiments
+
+Oracle Experiments
+
+Motivation Tests
+
+Expected Findings
+
+Kill Criteria
+
+Research Debt
+```
+
+Then run:
+
+```text
+researchos next PROJECT_ID
+```
+
+and inspect whether the selected experiment is scientifically sensible.
+
+Do NOT execute it automatically yet unless it is:
+
+```text
+cheap
+safe
+within scope
+within approved budget
+and explicitly allowed by existing execution policy
+```
+
+For any substantial GPU experiment:
+
+```text
+prepare the frozen experiment
+but stop before dispatch
+```
+
+and report it for review.
+
+The objective is to test **research quality**, not GPU automation.
+
+---
+
+# 22. Add planner evaluation harness
+
+This is important.
+
+We need a way to determine whether ResearchOS is becoming a better researcher.
+
+Create offline planner-evaluation cases.
+
+Each case should contain:
+
+```text
+research state
+
+hypotheses
+
+findings
+
+uncertainties
+
+candidate experiments
+
+known bad choices
+
+expected reasoning properties
+```
+
+Examples:
+
+### Case A
+
+```text
+Problem magnitude unknown.
+Complex optimization available.
+```
+
+Expected:
+
+```text
+choose motivation measurement
+NOT optimization
+```
+
+### Case B
+
+```text
+Oracle benefit ≈ 0.
+```
+
+Expected:
+
+```text
+stop implementation branch
+```
+
+### Case C
+
+```text
+Central result positive but unreplicated.
+```
+
+Expected:
+
+```text
+replicate
+```
+
+### Case D
+
+```text
+Two competing mechanisms explain result.
+```
+
+Expected:
+
+```text
+choose discrimination experiment
+```
+
+### Case E
+
+```text
+Unexpected result contradicts prediction.
+```
+
+Expected:
+
+```text
+create uncertainty
+NOT rewrite prediction
+```
+
+---
+
+# 23. Planner regression suite
+
+Create a durable set of research-reasoning regression cases.
+
+The test should verify structural properties rather than exact prose.
+
+For example:
+
+```text
+selected experiment type
+blocked experiment not selected
+falsification candidate considered
+replication triggered
+scope escalation triggered
+oracle gate respected
+```
+
+Do not test exact LLM wording.
+
+---
+
+# 24. Deterministic vs reasoning tests
+
+Separate:
+
+```text
+deterministic unit tests
+```
+
+from:
+
+```text
+research reasoning evaluations
+```
+
+Deterministic CI must remain fully reproducible.
+
+LLM/reasoning evaluations should be separately labeled and should not make ordinary CI flaky.
+
+If an external reasoning model is unavailable:
+
+```text
+deterministic tests still pass
+```
+
+---
+
+# 25. Context architecture
+
+Do not send the entire database to the reasoning model.
+
+Create a Research Context Builder.
+
+Suggested output:
+
+```yaml
+project:
+  question:
+  envelope:
+
+hypotheses:
+  active:
+  supported:
+  falsified:
+
+uncertainties:
+  blocking:
+  high_priority:
+
+findings:
+  central:
+  recent:
+  contradictory:
+
+research_debt:
+
+resources:
+
+budget:
+
+candidate_dependencies:
+```
+
+Bound context size.
+
+Prefer scientific relevance over recency alone.
+
+---
+
+# 26. Research journal
+
+Create a compact machine-generated research journal.
+
+Each research iteration should append something equivalent to:
+
+```text
+Iteration 12
+
+Question:
+...
+
+Belief before:
+...
+
+Critical uncertainty:
+...
+
+Experiment:
+...
+
+Prediction:
+...
+
+Observation:
+...
+
+Interpretation:
+...
+
+Belief after:
+...
+
+New uncertainty:
+...
+
+Decision:
+...
+```
+
+This should be derived from structured DB state.
+
+Do not make Markdown journal the source of truth.
+
+SQLite remains authoritative.
+
+---
+
+# 27. Research trajectory visualization
+
+Add a lightweight command:
+
+```bash
+researchos trajectory PROJECT_ID
+```
+
+It should show:
+
+```text
+H1 ACTIVE
+ │
+ E1
+ │
+ F1 SUPPORT
+ │
+ ├── U3
+ │    │
+ │    E4
+ │    │
+ │    F5 FALSIFY
+ │
+ H1 FALSIFIED
+
+H2 ACTIVE
+ │
+ E2
+ │
+ F2 SUPPORT
+ │
+ E6 REPLICATION
+ │
+ F7 SUPPORT
+ │
+ H2 SUPPORTED
+```
+
+Plain text / Markdown output is sufficient.
+
+Do NOT build a web dashboard.
+
+---
+
+# 28. No autonomous literature scope expansion yet
+
+Research reasoning may identify:
+
+```text
+prior-art question
+missing baseline
+novelty concern
+```
+
+but V0.3 must not autonomously expand the Project Envelope based on newly discovered literature.
+
+Instead create:
+
+```text
+LITERATURE_CHECK_REQUIRED
+```
+
+or Research Debt.
+
+Literature intelligence will be a later stage.
+
+---
+
+# 29. Tests
+
+Add tests for at least:
+
+1. Research Question Graph relationships persist correctly
+2. hypothesis types persist
+3. competing hypotheses represented
+4. blocking uncertainty blocks downstream optimization
+5. existence/motivation experiment outranks premature optimization
+6. oracle experiment can kill implementation branch
+7. candidate includes outcome interpretations
+8. prediction stores mechanism and falsification

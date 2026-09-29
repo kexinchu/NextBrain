@@ -53,6 +53,20 @@ def parser() -> argparse.ArgumentParser:
             freeze.add_argument('--repo', type=Path, required=True)
     next_command = commands.add_parser('next')
     next_command.add_argument('project')
+    research = commands.add_parser('research')
+    ra = research.add_subparsers(dest='action', required=True)
+    for operation in ('question', 'edge', 'debt', 'branch', 'maturity'):
+        op = ra.add_parser(operation)
+        op.add_argument('project')
+        if operation != 'maturity':
+            op.add_argument('--file', type=Path, required=True)
+    for operation in ('trajectory', 'journal'):
+        op = commands.add_parser(operation)
+        op.add_argument('project')
+    evaluate = commands.add_parser('evaluate-planner')
+    evaluate.add_argument('--cases', type=Path, required=True)
+    pilot = commands.add_parser('pilot-check')
+    pilot.add_argument('--plans', type=Path, required=True)
     advance = commands.add_parser('advance')
     advance.add_argument('project')
     advance.add_argument('--max-runs', type=int, default=1)
@@ -79,7 +93,8 @@ def parser() -> argparse.ArgumentParser:
     approve = ga.add_parser('approve')
     approve.add_argument('gate_id')
     approve.add_argument('--digest', required=True)
-    approve.add_argument('--decision', required=True, choices=['CONTINUE','STOP','PIVOT','FREEZE_STORY'])
+    approve.add_argument('--decision', required=True, choices=['CONTINUE','STOP','PIVOT','FREEZE_STORY', 'CONTINUE_EXPLORATION',
+               'FOCUS_MECHANISM', 'REPLICATE', 'EXPAND_EVALUATION', 'STOP_PROJECT', 'REQUEST_SCOPE_CHANGE'])
     approve.add_argument('--message-file', type=Path, required=True)
     approve.add_argument('--by', required=True)
     envelope = commands.add_parser('envelope')
@@ -135,7 +150,26 @@ def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
     try:
         app = ResearchOS(args.home)
-        if args.command == 'advance':
+        if args.command == 'research':
+            from .intelligence import set_question, add_edge, add_debt, branch, claim_maturity
+            if args.action == 'maturity':
+                result = claim_maturity(app, args.project)
+            else:
+                operation = {'question': set_question, 'edge': add_edge, 'debt': add_debt, 'branch': branch}[args.action]
+                result = operation(app, args.project, yaml.safe_load(args.file.read_text()))
+        elif args.command in {'trajectory', 'journal'}:
+            from .intelligence import trajectory, journal
+            print((trajectory if args.command == 'trajectory' else journal)(app, args.project))
+            return 0
+        elif args.command == 'evaluate-planner':
+            from .reasoning_eval import evaluate_cases
+            result = evaluate_cases(args.cases)
+            print(json.dumps(result, indent=2))
+            return 0 if result['passed'] else 1
+        elif args.command == 'pilot-check':
+            from .pilot import inspect_go
+            result = inspect_go(args.plans)
+        elif args.command == 'advance':
             from .advance import advance
             result = advance(app, args.project, args.max_runs, args.max_wall_time, args.resume)
         elif args.command == 'uncertainty':

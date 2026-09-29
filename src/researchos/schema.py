@@ -103,3 +103,26 @@ BEGIN SELECT RAISE(ABORT, 'planner decision is immutable'); END;
 CREATE TRIGGER IF NOT EXISTS immutable_planner_proposal BEFORE UPDATE ON planner_proposals
 BEGIN SELECT RAISE(ABORT, 'planner proposal is immutable'); END;
 """
+
+SCHEMA_V4 = """
+CREATE TABLE IF NOT EXISTS research_questions (
+ id TEXT PRIMARY KEY, project_id TEXT NOT NULL UNIQUE REFERENCES projects(id),
+ data TEXT NOT NULL, created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS research_edges (
+ id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id),
+ data TEXT NOT NULL, created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS research_debt (
+ id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id),
+ data TEXT NOT NULL, status TEXT NOT NULL, created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS intelligence_notes (
+ id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id),
+ finding_id TEXT REFERENCES findings(id), data TEXT NOT NULL, created_at TEXT NOT NULL
+);
+CREATE TRIGGER IF NOT EXISTS immutable_research_question BEFORE UPDATE ON research_questions
+BEGIN SELECT RAISE(ABORT, 'core question changes require scope review'); END;
+CREATE TRIGGER IF NOT EXISTS immutable_intelligence_note BEFORE UPDATE ON intelligence_notes
+BEGIN SELECT RAISE(ABORT, 'research journal evidence is append-only'); END;
+"""

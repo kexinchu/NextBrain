@@ -1,0 +1,15 @@
+{
+  "status": "HUMAN_GATE_1_REQUIRED",
+  "eligible": [],
+  "reviewed": [
+    {
+      "path": "/Users/kexin.chu/Github/paper-manager/Ideas/Research-Map/plans/2026-09-27-pursue-verdicts.md",
+      "sha256": "6e7011e5f02b984ff3ccfaf14dbc9a396a6322f6d2597208c442f5c2e6312992",
+      "idea_id": null,
+      "decision": null,
+      "explicit_go": false
+    }
+  ],
+  "will_execute": false,
+  "reason": "Only an explicitly attributed GO decision admits a real pilot; pursue/ranking is insufficient."
+}

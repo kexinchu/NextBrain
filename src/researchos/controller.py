@@ -31,6 +31,9 @@ def gate_summary(app, project, reason, suggested_action='CONTINUE'):
                 t for u in context['uncertainties'] for t in u.get('threats_to_validity', []))) or
                 ['Replication coverage and workload representativeness need human review.'],
             'research_state_digest': digest}
+    from .intelligence import active, research_review
+    if active(app, project):
+        data['research_review'] = research_review(app, project, context)
     record = {'id': uid('GATE2'), 'project_id': project, 'state_digest': digest,
               'digest': protocol_digest(data), 'data': encoded(data), 'action': None,
               'approval_id': None, 'created_at': utc_stamp()}
@@ -41,6 +44,11 @@ def gate_summary(app, project, reason, suggested_action='CONTINUE'):
 
 
 def approve_gate(app, gate_id, digest, action, message_file, actor):
+    aliases = {'CONTINUE_EXPLORATION': 'CONTINUE', 'FOCUS_MECHANISM': 'CONTINUE',
+               'REPLICATE': 'CONTINUE', 'EXPAND_EVALUATION': 'CONTINUE',
+               'STOP_PROJECT': 'STOP', 'REQUEST_SCOPE_CHANGE': 'PIVOT'}
+    requested_action = action
+    action = aliases.get(action, action)
     if action not in {'CONTINUE', 'PIVOT', 'STOP', 'FREEZE_STORY'}:
         raise ValueError('invalid Human Gate #2 action')
     row = app.store.get('maturity_gates', gate_id)
@@ -53,7 +61,11 @@ def approve_gate(app, gate_id, digest, action, message_file, actor):
             h['state'] == 'SUPPORTED' and h['confidence'] in {'REPLICATED', 'ROBUST'}
             for h in current['hypotheses']):
         raise ValueError('FREEZE_STORY requires replicated scientific evidence')
-    receipt = Policy(app).approve(row['project_id'], 'gate:' + action, digest, message_file, actor)
+    if action == 'FREEZE_STORY':
+        from .intelligence import active, research_review
+        if active(app, row['project_id']) and not research_review(app, row['project_id'], current)['paper_ready']:
+            raise ValueError('claim-specific evidence maturity or research debt blocks paper readiness')
+    receipt = Policy(app).approve(row['project_id'], 'gate:' + requested_action, digest, message_file, actor)
     with app.store.connect() as db:
         db.execute('UPDATE maturity_gates SET action=?,approval_id=? WHERE id=?', (action, receipt['id'], gate_id))
         if action == 'STOP':
@@ -180,6 +192,8 @@ def after_run(app, run_id):
                 if positive and confidence == 'PRELIMINARY':
                     db.execute("UPDATE uncertainties SET status='REDUCED' WHERE id=?",
                                (planning['uncertainty_id'],))
+        from .intelligence import observe_finding
+        observe_finding(app, run, found['id'])
         if not real:
             reason = 'SYSTEM VALIDATION — NOT SCIENTIFIC EVIDENCE; scientific state unchanged.'
         elif finding['outcome'] == 'FALSIFIED':

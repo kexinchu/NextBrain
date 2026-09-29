@@ -231,8 +231,17 @@ class ResearchOS:
             required(data, ('statement',))
             if not isinstance(data['statement'], str):
                 raise ValueError('statement must be text')
+            if kind == 'claim':
+                from .intelligence import MATURITY
+                if not isinstance(data.get('maturity_requirements', []), list) or any(not isinstance(v, str) or v not in MATURITY for v in data.get('maturity_requirements', [])):
+                    raise ValueError('invalid claim maturity requirements')
+                for h in id_list(data, 'hypothesis_ids'):
+                    self.same_project('hypotheses', h, project_id)
             if kind == 'hypothesis':
                 required(data, ('falsification_condition',))
+                from .intelligence import HYPOTHESIS_TYPES
+                if data.get('hypothesis_type', 'UNCLASSIFIED') not in HYPOTHESIS_TYPES | {'UNCLASSIFIED'}:
+                    raise ValueError('invalid hypothesis_type')
                 from .research_state import HYPOTHESIS_STATES
                 if data.get('state', 'PROPOSED') not in HYPOTHESIS_STATES:
                     raise ValueError('invalid hypothesis lifecycle state')
@@ -433,6 +442,6 @@ class ResearchOS:
                 except (ValueError, RuntimeError, OSError) as exc:
                     frozen[name] = str(exc)
             projects.append({**row, 'workspace': str(path), 'engine_freezes': frozen})
-        return {'schema_version': 3, 'counts': {t: len(self.store.list(t)) for t in sorted(TABLES)},
+        return {'schema_version': 4, 'counts': {t: len(self.store.list(t)) for t in sorted(TABLES)},
                 'projects': projects, 'remote_execution_enabled': True,
                 'execution_mode': 'explicit single-run dispatch or bounded advance (default max_runs=1)'}
