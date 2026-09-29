@@ -25,6 +25,8 @@ def git(repo, *argv, binary=False):
 
 
 def validate_protocol(spec):
+    if spec.get('evidence_kind', 'SCIENTIFIC') not in {'SCIENTIFIC', 'SYSTEM_VALIDATION'}:
+        raise ValueError('invalid evidence_kind')
     required(spec, ('prediction', 'protocol', 'environment_requirement', 'resource_requirement',
                     'timeout', 'budget'))
     protocol = spec['protocol']

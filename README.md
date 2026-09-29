@@ -5,6 +5,14 @@
 安装、可在 GPT/Claude/Cursor 对话框直接触发的 skills，并由确定性 Python 状态机约束每轮读什么、
 能改什么、需要什么证据、何时必须停下报告。当前对话中选中的模型就是后台模型；skills 不会偷偷调用第二个模型。
 
+## ResearchOS V0.2：有界科研循环
+
+在现有可恢复执行器上增加 `uncertainty`、Findings Memory、可审计规划和 `advance`。
+默认最多运行一次；多次运行需要显式指定 `--max-runs`，每次完成后从数据库重新规划。
+科研推理通过经过校验的提案进入系统，范围、预算、依赖、资源和人工 gate 由 Python 强制执行。
+详见 [V0.2 指南](docs/researchos-bounded-loop.md)、[验证报告](docs/researchos-v02-validation.md)
+和 [旧组件分类](docs/researchos-legacy-classification.md)。
+
 ## ResearchOS：可恢复的单次实验
 
 当前执行路径是 `Project Envelope → experiment freeze → run create/dispatch → recover → Finding`。

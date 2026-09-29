@@ -53,6 +53,14 @@ class Policy:
             raise ValueError('envelope must authorize some compute')
         if data.get('claim') and data.get('claim_status') != 'PROVISIONAL':
             raise ValueError('early claims must be explicitly PROVISIONAL')
+        maturity = data.get('maturity_policy', {})
+        if not isinstance(maturity, dict) or set(maturity) - {'independent_replications', 'allow_robust'}:
+            raise ValueError('invalid maturity_policy')
+        count = maturity.get('independent_replications', 1)
+        if isinstance(count, bool) or not isinstance(count, int) or not 1 <= count <= 5:
+            raise ValueError('independent_replications must be an integer from 1 to 5')
+        if not isinstance(maturity.get('allow_robust', False), bool):
+            raise ValueError('allow_robust must be boolean')
         return data, protocol_digest(data)
 
     def approve(self, project, kind, digest, message_file: Path, actor):
@@ -142,7 +150,10 @@ class Policy:
         scope = spec.get('scope', {})
         if not isinstance(scope, dict):
             return blockers + ['scope must be a mapping']
-        for field in ('problem', 'boundary', 'architecture', 'evaluation_target'):
+        allowed_scope = {'problem', 'boundary', 'architecture', 'evaluation_target', 'claim'}
+        if set(scope) - allowed_scope:
+            blockers.append('unknown scope fields require explicit human review')
+        for field in allowed_scope:
             if field in scope and scope[field] != envelope.get(field):
                 blockers.append(f'{field} differs from approved envelope')
         baselines = spec.get('protocol', {}).get('baselines', [])
@@ -168,7 +179,8 @@ def machine_capabilities(row):
         parts = [part.strip() for part in line.split(',')]
         if len(parts) >= 2:
             try:
-                gpus.append({'index': index, 'name': parts[0], 'vram_gb': float(parts[1]) / 1024})
+                gpus.append({'index': index, 'name': parts[0], 'vram_gb': float(parts[1]) / 1024,
+                             'free_vram_gb': float(parts[3]) / 1024 if len(parts) > 3 else float(parts[1]) / 1024})
             except ValueError:
                 continue
     return {'gpus': gpus, 'cpu': True}
@@ -187,7 +199,7 @@ def match_machine(requirement, machines):
         caps = machine_capabilities(machine)
         if not caps:
             continue
-        gpus = sorted((g for g in caps.get('gpus', []) if g['vram_gb'] >= memory),
+        gpus = sorted((g for g in caps.get('gpus', []) if g['vram_gb'] >= memory and g.get('free_vram_gb', g['vram_gb']) >= memory),
                       key=lambda g: g['vram_gb'])
         if gpu_required and len(gpus) < count:
             continue

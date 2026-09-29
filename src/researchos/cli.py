@@ -53,6 +53,35 @@ def parser() -> argparse.ArgumentParser:
             freeze.add_argument('--repo', type=Path, required=True)
     next_command = commands.add_parser('next')
     next_command.add_argument('project')
+    advance = commands.add_parser('advance')
+    advance.add_argument('project')
+    advance.add_argument('--max-runs', type=int, default=1)
+    advance.add_argument('--max-wall-time', default='1h')
+    advance.add_argument('--resume')
+    uncertainty = commands.add_parser('uncertainty')
+    ua = uncertainty.add_subparsers(dest='action', required=True)
+    for operation in ('add', 'list'):
+        op = ua.add_parser(operation)
+        op.add_argument('project')
+        if operation == 'add':
+            op.add_argument('--file', type=Path, required=True)
+    planner = commands.add_parser('planner')
+    pa = planner.add_subparsers(dest='action', required=True)
+    for operation in ('import', 'context', 'decisions'):
+        op = pa.add_parser(operation)
+        op.add_argument('project')
+        if operation == 'import':
+            op.add_argument('--file', type=Path, required=True)
+    gate = commands.add_parser('gate')
+    ga = gate.add_subparsers(dest='action', required=True)
+    review = ga.add_parser('review')
+    review.add_argument('project')
+    approve = ga.add_parser('approve')
+    approve.add_argument('gate_id')
+    approve.add_argument('--digest', required=True)
+    approve.add_argument('--decision', required=True, choices=['CONTINUE','STOP','PIVOT','FREEZE_STORY'])
+    approve.add_argument('--message-file', type=Path, required=True)
+    approve.add_argument('--by', required=True)
     envelope = commands.add_parser('envelope')
     actions = envelope.add_subparsers(dest='action', required=True)
     for operation in ('check', 'approve'):
@@ -106,7 +135,28 @@ def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
     try:
         app = ResearchOS(args.home)
-        if args.command == 'envelope':
+        if args.command == 'advance':
+            from .advance import advance
+            result = advance(app, args.project, args.max_runs, args.max_wall_time, args.resume)
+        elif args.command == 'uncertainty':
+            from .research_state import add_uncertainty
+            result = (add_uncertainty(app, args.project, yaml.safe_load(args.file.read_text()))
+                      if args.action == 'add' else app.store.list('uncertainties', args.project))
+        elif args.command == 'planner':
+            from .planner import import_proposals
+            from .research_state import build_context
+            if args.action == 'import':
+                result = import_proposals(app, args.project, yaml.safe_load(args.file.read_text()))
+            elif args.action == 'context':
+                result = build_context(app, args.project)
+            else:
+                result = app.store.list('planner_decisions', args.project)
+        elif args.command == 'gate':
+            from .controller import approve_gate, gate_summary
+            result = (gate_summary(app, args.project, 'Explicit human evidence review')
+                      if args.action == 'review' else approve_gate(
+                          app, args.gate_id, args.digest, args.decision, args.message_file, args.by))
+        elif args.command == 'envelope':
             from .policy import Policy
             policy = Policy(app)
             if args.action == 'check':

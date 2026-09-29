@@ -6,7 +6,7 @@ import json
 from .policy import Policy, match_machine
 
 
-def prepare_next(app, project):
+def legacy_next(app, project):
     from .execution import Runs
 
     policy = Policy(app)
@@ -65,3 +65,10 @@ def prepare_next(app, project):
         selected['requires_human_gate'] = state == 'SCOPE_CHANGE_REQUESTED'
     return {'project_id': project, 'candidate': selected,
             'requires_human_gate': selected['requires_human_gate'], 'will_execute': False}
+
+
+def prepare_next(app, project):
+    if app.store.list('uncertainties', project) or app.store.list('planner_proposals', project):
+        from .planner import plan
+        return plan(app, project)
+    return legacy_next(app, project)

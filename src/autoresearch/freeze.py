@@ -21,6 +21,10 @@ class FreezeGuard:
         return self.root / ".autoresearch" / "freezes"
 
     def create(self, name: str, relative_paths: Iterable[str]) -> Path:
+        relative_paths = list(relative_paths)
+        if name == 'paper-story' or 'paper/STORY.md' in relative_paths:
+            from researchos.controller import check_workspace_story_gate
+            check_workspace_story_gate(self.root)
         resolved = [self.root / path for path in relative_paths]
         digest, files = tree_hash(resolved, self.root)
         if not files:

@@ -1749,3 +1749,1230 @@ real single-run execution
 ```
 
 Do not implement autonomous multi-run S7 loops until the single resumable run path is reliable.
+
+### Session requirement 0012
+
+<!-- autoresearch-message:0012-20260929T011802.716515Z.md -->
+- Recorded at: `20260929T011802.716515Z`
+- Source: `user`
+- Immutable record: [`0012-20260929T011802.716515Z.md`](requirements/messages/0012-20260929T011802.716515Z.md)
+
+# Task: ResearchOS V0.2 — Bounded Autonomous Research Loop
+
+Continue development from the current `master` of:
+
+```text
+~/Github/NextBrain
+```
+
+Repository:
+
+```text
+git@github.com:kexinchu/NextBrain.git
+```
+
+PR #3 has been merged.
+
+ResearchOS V0.1 already provides the trusted execution primitive:
+
+```text
+Frozen Experiment
+    ↓
+Unique Run
+    ↓
+Resource Selection
+    ↓
+Execution
+    ↓
+Recovery
+    ↓
+Artifact Collection
+    ↓
+Evidence
+    ↓
+Finding
+```
+
+Do NOT redesign this execution path.
+
+The goal of V0.2 is to build the first **bounded autonomous research loop** on top of it.
+
+The key question is:
+
+> Given the current Project Envelope, hypotheses, experiment history, Findings Memory, available compute and remaining budget, what is the highest-value next experiment, and can ResearchOS execute a small bounded sequence of such experiments without silently changing the research question?
+
+---
+
+# 0. Before modifying code
+
+Start from clean current master.
+
+```bash
+cd ~/Github/NextBrain
+
+git status
+git pull
+git log --oneline -10
+
+pytest
+ruff check .
+python -m build
+autoresearch doctor --release
+```
+
+Inspect carefully:
+
+```text
+src/researchos/
+src/autoresearch/
+docs/researchos*.md
+tests/test_researchos.py
+tests/test_resumable_runs.py
+```
+
+Especially understand the current implementations of:
+
+```text
+next_experiment.py
+execution.py
+policy.py
+freeze.py
+transport.py
+worker.py
+store.py
+schema.py
+```
+
+Do not duplicate existing functionality.
+
+Create a focused branch such as:
+
+```text
+codex/researchos-bounded-loop
+```
+
+---
+
+# 1. Core architecture
+
+The intended V0.2 loop is:
+
+```text
+              Project Envelope
+                     │
+                     ▼
+              Findings Memory
+                     │
+                     ▼
+              Hypothesis State
+                     │
+                     ▼
+        ┌── Research Planner ──┐
+        │                      │
+        ▼                      ▼
+Candidate Experiments     Stop/Escalate
+        │
+        ▼
+Experiment Selector
+        │
+        ▼
+Scope / Policy Check
+        │
+        ▼
+Freeze ONE Experiment
+        │
+        ▼
+Existing V0.1 Executor
+        │
+        ▼
+Evidence Collection
+        │
+        ▼
+Finding
+        │
+        ▼
+Update Research State
+        │
+        └───────────→ re-plan
+```
+
+The loop MUST re-plan after every completed experiment.
+
+Do NOT generate an entire fixed experiment sequence and blindly execute it.
+
+---
+
+# 2. Research state must become explicit
+
+Introduce or refine explicit hypothesis lifecycle states.
+
+At minimum:
+
+```text
+PROPOSED
+ACTIVE
+SUPPORTED
+FALSIFIED
+INCONCLUSIVE
+BLOCKED
+```
+
+Prefer keeping confidence separate from state.
+
+For example:
+
+```yaml
+hypothesis_id: H3
+
+state: ACTIVE
+
+confidence:
+  value: 0.55
+  basis: qualitative
+
+supporting_findings:
+  - F0012
+
+contradicting_findings:
+  - F0018
+
+open_uncertainties:
+  - behavior under bursty workload
+  - sensitivity to prediction error
+```
+
+Do NOT invent mathematically precise probabilities unless the evidence justifies them.
+
+A qualitative or ordinal confidence representation is acceptable.
+
+---
+
+# 3. Findings Memory must drive planning
+
+The planner must not reason only from:
+
+```text
+latest experiment
+```
+
+Before proposing the next experiment, construct a bounded Research Context containing:
+
+```text
+Project Envelope
+
+Active hypotheses
+
+Supported hypotheses
+
+Falsified hypotheses
+
+Relevant Findings
+
+Existing claims
+
+Completed experiments
+
+Failed operational runs
+
+Unresolved uncertainties
+
+Available machines
+
+Remaining budget
+
+Existing experiment DAG/dependencies
+```
+
+Avoid dumping the entire historical database into an LLM prompt.
+
+Create a compact structured context.
+
+---
+
+# 4. Introduce explicit Uncertainty objects
+
+This is important.
+
+ResearchOS should not choose experiments directly from hypotheses alone.
+
+Represent unresolved research questions as first-class uncertainties.
+
+Example:
+
+```yaml
+uncertainty_id: U17
+
+project_id: P001
+
+question:
+  Does the proposed KV placement remain beneficial
+  when reuse prediction precision falls below 70%?
+
+related_hypotheses:
+  - H2
+  - H3
+
+importance: HIGH
+
+current_evidence:
+  - F21
+  - F24
+
+status: OPEN
+```
+
+Suggested states:
+
+```text
+OPEN
+REDUCED
+RESOLVED
+BLOCKED
+```
+
+The research loop should primarily ask:
+
+> Which uncertainty is currently most decision-relevant?
+
+not:
+
+> Which parameter should we optimize next?
+
+---
+
+# 5. Candidate Experiment generation
+
+For the highest-value uncertainty, generate a small bounded candidate set.
+
+Default:
+
+```text
+2–4 candidate experiments
+```
+
+Not 20.
+
+Each candidate should contain:
+
+```yaml
+candidate_id:
+
+uncertainty_id:
+
+hypothesis_ids:
+
+question:
+
+experiment_type:
+
+expected_information:
+
+possible_outcomes:
+
+interpretation_by_outcome:
+
+estimated_cost:
+
+resource_requirement:
+
+dependencies:
+
+risk:
+
+within_scope:
+```
+
+Critically, require:
+
+```text
+possible_outcomes
+```
+
+before execution.
+
+Example:
+
+```yaml
+possible_outcomes:
+
+  strong_positive:
+    interpretation:
+      supports H3
+
+  neutral:
+    interpretation:
+      H3 remains uncertain
+
+  negative:
+    interpretation:
+      falsifies H3
+
+  operational_failure:
+    interpretation:
+      no scientific conclusion
+```
+
+This prevents post-hoc reinterpretation.
+
+---
+
+# 6. Experiment selection must optimize information value
+
+Do NOT select experiments merely because they are likely to improve a metric.
+
+The selector should reason approximately about:
+
+```text
+decision relevance
+×
+expected information gain
+×
+ability to distinguish hypotheses
+÷
+cost
+```
+
+A practical V0.2 heuristic is acceptable.
+
+For example:
+
+```text
+score =
+    uncertainty_importance
+  × discrimination_power
+  × expected_information_gain
+  × feasibility
+  ÷ normalized_cost
+```
+
+Do not pretend this is statistically exact.
+
+The score is a planning heuristic.
+
+Store the component values and explanation.
+
+---
+
+# 7. Distinguish exploration from optimization
+
+ResearchOS must explicitly distinguish:
+
+```text
+EXPLORATION
+```
+
+from:
+
+```text
+OPTIMIZATION
+```
+
+Exploration asks:
+
+```text
+Is the phenomenon real?
+Why does it happen?
+Under what conditions?
+Which hypothesis is correct?
+```
+
+Optimization asks:
+
+```text
+How much can we improve the metric?
+What parameter is best?
+```
+
+Before the core mechanism is sufficiently established, prefer exploration.
+
+Do not allow the system to spend dozens of experiments tuning parameters for a mechanism that may not matter.
+
+---
+
+# 8. Experiment types
+
+Introduce useful semantic experiment types.
+
+At minimum:
+
+```text
+MOTIVATION
+FEASIBILITY
+MECHANISM
+DISCRIMINATION
+PRIMARY
+REPLICATION
+SENSITIVITY
+ABLATION
+STRESS
+```
+
+These should influence planning.
+
+For example:
+
+```text
+MOTIVATION
+→ establish whether the problem matters
+
+DISCRIMINATION
+→ distinguish competing explanations
+
+PRIMARY
+→ test central claim
+
+REPLICATION
+→ test reproducibility
+
+ABLATION
+→ isolate mechanism
+
+STRESS
+→ determine validity boundary
+```
+
+---
+
+# 9. Add researchos next
+
+Upgrade:
+
+```bash
+researchos next PROJECT_ID
+```
+
+into a real planner.
+
+Expected output should resemble:
+
+```text
+PROJECT
+P001
+
+CURRENT RESEARCH STATE
+3 active hypotheses
+1 supported
+1 falsified
+
+HIGHEST-VALUE UNCERTAINTY
+U17
+
+Question:
+Does reuse prediction accuracy erase the benefit?
+
+Why this matters:
+If benefit disappears below realistic prediction accuracy,
+the central mechanism is not practical.
+
+CANDIDATE EXPERIMENTS
+E31
+E32
+E33
+
+SELECTED
+E32
+
+Reason:
+Highest discrimination/cost ratio.
+
+Expected runtime:
+22 min
+
+Machine:
+cloudsys01 GPU0
+
+Estimated GPU-hours:
+0.37
+
+Prediction:
+...
+
+Possible interpretations:
+...
+
+Scope:
+WITHIN APPROVED ENVELOPE
+
+Ready:
+YES
+```
+
+`researchos next` MUST NOT execute anything.
+
+---
+
+# 10. Add researchos advance
+
+Introduce:
+
+```bash
+researchos advance PROJECT_ID
+```
+
+and bounded mode:
+
+```bash
+researchos advance PROJECT_ID --max-runs 3
+```
+
+Default:
+
+```text
+max-runs = 1
+```
+
+Do NOT default to autonomous multi-run execution.
+
+Each iteration:
+
+```text
+read state
+    ↓
+select uncertainty
+    ↓
+generate candidates
+    ↓
+select experiment
+    ↓
+scope check
+    ↓
+freeze experiment
+    ↓
+execute using V0.1
+    ↓
+collect evidence
+    ↓
+create Finding
+    ↓
+update hypothesis/uncertainty
+    ↓
+evaluate stop rules
+    ↓
+RE-PLAN
+```
+
+Never pre-dispatch multiple experiments.
+
+---
+
+# 11. Hard bounds
+
+`advance` must obey all of:
+
+```text
+max_runs
+max_wall_time
+project GPU-hour budget
+per-run timeout
+retry limits
+scope boundaries
+machine availability
+```
+
+Suggested CLI:
+
+```bash
+researchos advance P001 \
+  --max-runs 3 \
+  --max-wall-time 4h
+```
+
+If any hard bound is reached:
+
+```text
+STOP CLEANLY
+```
+
+and record why.
+
+---
+
+# 12. Stop / Continue / Escalate controller
+
+After every Finding, produce one explicit decision:
+
+```text
+CONTINUE
+STOP_HYPOTHESIS
+STOP_PROJECT
+ESCALATE_HUMAN
+REPLICATE
+```
+
+Examples:
+
+### CONTINUE
+
+Important uncertainty remains and an in-scope experiment can reduce it.
+
+### STOP_HYPOTHESIS
+
+Critical hypothesis has been falsified.
+
+This does NOT necessarily stop the project.
+
+### REPLICATE
+
+Result is important enough that independent confirmation is required.
+
+### STOP_PROJECT
+
+Examples:
+
+```text
+core mechanism falsified
+problem magnitude negligible
+budget exhausted
+all useful in-scope hypotheses exhausted
+```
+
+### ESCALATE_HUMAN
+
+Required when:
+
+```text
+core question should change
+claim scope should change
+new architecture required
+budget increase needed
+new major baseline family required
+project envelope must change
+```
+
+---
+
+# 13. Replication policy
+
+A single promising run must not automatically create a high-confidence Finding.
+
+Important positive results should trigger replication.
+
+Represent:
+
+```text
+original_run
+replication_runs
+```
+
+Prefer variation in at least one of:
+
+```text
+seed
+workload slice
+machine
+input subset
+execution time
+```
+
+Do not treat:
+
+```text
+same command
+same seed
+same machine
+```
+
+as strong independent replication.
+
+---
+
+# 14. Finding confidence
+
+Finding confidence should depend on evidence quality.
+
+For example:
+
+```text
+PRELIMINARY
+REPLICATED
+ROBUST
+```
+
+or similar.
+
+Do not use arbitrary numeric confidence unless justified.
+
+Example progression:
+
+```text
+single primary run
+→ PRELIMINARY
+
+independent replication
+→ REPLICATED
+
+replication + sensitivity + relevant baselines
+→ ROBUST
+```
+
+Keep this configurable.
+
+---
+
+# 15. Promotion semantics
+
+Do not think of machines only as:
+
+```text
+4060 → A6000
+```
+
+Think of experiment maturity.
+
+Example:
+
+```text
+FEASIBILITY
+    ↓
+PRIMARY
+    ↓
+REPLICATION
+    ↓
+SENSITIVITY / ABLATION
+```
+
+Machine selection should remain resource-driven.
+
+For example:
+
+```text
+small feasibility
+→ 4060 when available
+
+large-model feasibility
+→ A6000 directly
+
+CPU analysis
+→ local
+
+replication
+→ preferably another eligible GPU/server
+```
+
+---
+
+# 16. 4060 must not block V0.2
+
+Current known state:
+
+```text
+kexin-server
+kexin@192.168.50.2
+```
+
+is still unreachable with:
+
+```text
+No route to host
+```
+
+Do not modify SSH credentials or trust configuration automatically.
+
+Continue V0.2 development without it.
+
+Use the reachable A6000 infrastructure for safe validation when necessary.
+
+Clearly mark synthetic validation as:
+
+```text
+NOT SCIENTIFIC EVIDENCE
+```
+
+---
+
+# 17. A6000 environment safety
+
+Before real GPU execution, verify:
+
+```text
+Python runtime
+CUDA runtime
+driver
+available GPU memory
+available disk
+experiment working directory
+repository state
+```
+
+Known prior issue:
+
+```text
+cloudsys02 root filesystem was effectively full
+```
+
+Do not automatically clean it.
+
+If insufficient disk remains:
+
+```text
+mark machine unavailable
+```
+
+with reason.
+
+Do not silently redirect experiment output into unknown directories.
+
+---
+
+# 18. Human Gate #2
+
+Introduce an explicit evidence maturity gate.
+
+This is NOT triggered by every negative result.
+
+Trigger it when:
+
+```text
+central mechanism has sufficient evidence
+
+OR
+
+project requires scope change
+
+OR
+
+research appears mature enough to define paper claims
+
+OR
+
+system recommends stopping project
+```
+
+Human Gate #2 should summarize:
+
+```text
+Original question
+
+Current hypothesis graph
+
+Supported hypotheses
+
+Falsified hypotheses
+
+Strongest Findings
+
+Replication status
+
+Unexpected results
+
+Remaining uncertainties
+
+Compute consumed
+
+Compute remaining
+
+Closest known threats to validity
+
+Suggested action:
+CONTINUE
+PIVOT
+STOP
+FREEZE STORY
+```
+
+The system may suggest these actions.
+
+It must not silently choose PIVOT or FREEZE STORY.
+
+---
+
+# 19. Paper Story remains downstream
+
+Do NOT automatically write or freeze:
+
+```text
+paper/STORY.md
+```
+
+during ordinary S7 exploration.
+
+Only after Human Gate #2 explicitly approves:
+
+```text
+FREEZE STORY
+```
+
+should the existing AutoResearch paper workflow become authoritative.
+
+Target lifecycle:
+
+```text
+ResearchOS exploration
+        ↓
+Evidence maturity
+        ↓
+Human Gate #2
+        ↓
+FREEZE STORY
+        ↓
+AutoResearch paper pipeline
+```
+
+---
+
+# 20. Planner implementation
+
+Do not hard-code the entire planner as arbitrary Python heuristics.
+
+Separate:
+
+```text
+deterministic policy
+```
+
+from:
+
+```text
+research reasoning
+```
+
+Deterministic code should enforce:
+
+```text
+budget
+scope
+dependencies
+machine capability
+run limits
+approval validity
+experiment freeze
+artifact integrity
+```
+
+Research reasoning may propose:
+
+```text
+uncertainties
+candidate experiments
+expected information
+interpretation
+next questions
+```
+
+All agent-generated planner output must pass a schema validator before entering durable state.
+
+---
+
+# 21. Planner auditability
+
+Every planning round should generate a durable Planner Decision record.
+
+Example:
+
+```yaml
+planner_decision_id:
+
+project_id:
+
+research_state_digest:
+
+selected_uncertainty:
+
+candidate_experiments:
+
+selected_experiment:
+
+selection_scores:
+
+reasoning_summary:
+
+rejected_candidates:
+
+scope_check:
+
+budget_snapshot:
+
+created_at:
+```
+
+This is important.
+
+Later we should be able to ask:
+
+> Why did ResearchOS choose experiment E32 instead of E31?
+
+and reconstruct the answer.
+
+---
+
+# 22. Avoid context drift
+
+Every planning iteration should derive a compact context from durable state.
+
+Do NOT rely on an ever-growing conversation history.
+
+Conceptually:
+
+```text
+SQLite / Findings
+       ↓
+Context Builder
+       ↓
+bounded research context
+       ↓
+Planner
+       ↓
+schema-validated decision
+       ↓
+durable DB state
+```
+
+The database is the source of truth.
+
+The LLM conversation is not.
+
+---
+
+# 23. Tests
+
+Add comprehensive tests.
+
+At minimum test:
+
+1. planner reads all relevant Findings, not only latest
+2. falsified hypotheses excluded from ordinary next-step selection
+3. unresolved high-importance uncertainty can outrank metric optimization
+4. candidate experiment requires possible-outcome interpretations
+5. out-of-scope experiment rejected
+6. over-budget experiment rejected
+7. experiment dependencies enforced
+8. smallest valid machine selected
+9. 4060 unavailability does not block valid A6000 experiment
+10. `next` does not execute
+11. `advance` default executes at most one run
+12. `--max-runs 3` never executes a fourth
+13. every run causes re-planning
+14. hypothesis falsification can continue another branch
+15. operational failure does not alter scientific belief
+16. important positive result can trigger replication
+17. identical rerun is not considered strong independent replication
+18. scope change triggers Human Gate
+19. negative in-scope result does not automatically trigger Human Gate
+20. budget exhaustion cleanly stops loop
+21. planner decisions are durable
+22. planner state digest changes when evidence changes
+23. stale planner decision cannot execute against newer state
+24. malformed agent planner output rejected
+25. Project Envelope cannot be modified by planner
+26. paper STORY cannot be frozen without Human Gate #2
+27. synthetic executor result cannot become scientific evidence accidentally
+
+Run:
+
+```bash
+pytest
+ruff check .
+python -m build
+autoresearch doctor --release
+```
+
+Do not accept regressions.
+
+---
+
+# 24. Real validation
+
+After deterministic and synthetic tests pass:
+
+Perform a safe bounded validation on a reachable server.
+
+Do NOT yet run a costly research workload.
+
+Validate:
+
+```text
+planner
+→ next
+→ freeze
+→ one execution
+→ collect
+→ Finding
+→ re-plan
+```
+
+Then test:
+
+```text
+advance --max-runs 2
+```
+
+using harmless synthetic experiments.
+
+Confirm:
+
+```text
+exactly two or fewer runs
+no duplicate jobs
+Findings created
+state changes
+planner re-runs
+budget changes
+stop rule works
+```
+
+Clearly label these results:
+
+```text
+SYSTEM VALIDATION
+NOT SCIENTIFIC EVIDENCE
+```
+
+---
+
+# 25. Do not implement yet
+
+Explicitly out of scope for V0.2:
+
+```text
+automatic paper writing
+
+automatic paper STORY freeze
+
+unbounded research loops
+
+automatic Git merge
+
+automatic Project Envelope modification
+
+large multi-agent swarm
+
+large hyperparameter search
+
+automatic literature-derived scope expansion
+
+venue optimization
+
+review-score optimization
+```
+
+Do not add these merely because they are easy.
+
+---
+
+# 26. Cleanup
+
+Now that ResearchOS is becoming the main research control plane, inspect old NextBrain paths.
+
+Classify legacy components as:
+
+```text
+KEEP
+REUSE
+DEPRECATE
+DELETE
+```
+
+Delete only components that are clearly superseded and have no active dependency.
+
+Do NOT delete reusable infrastructure such as:
+
+```text
+evidence
+journal
+transactions
+freeze primitives
+alignment
+artifact integrity
+```
+
+unless there is

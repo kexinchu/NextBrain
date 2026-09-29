@@ -68,7 +68,9 @@ class Runs:
                                   'ON fr.run_id=e.id JOIN findings f ON f.id=fr.finding_id '
                                   "WHERE e.project_id=? AND e.experiment_id=? AND e.state='SUCCEEDED'",
                                   (project, dependency)).fetchall()
-            if not any(json.loads(r['data']).get('outcome') == 'SUPPORTED' for r in rows):
+            if not any(json.loads(r['data']).get('outcome') == 'SUPPORTED'
+                       and json.loads(r['data']).get('evidence_kind', 'SCIENTIFIC')
+                       == spec.get('evidence_kind', 'SCIENTIFIC') for r in rows):
                 blockers.append('dependency lacks supported executor evidence: ' + dependency)
         with self.store.connect() as db:
             hypothesis = db.execute('SELECT state FROM hypothesis_states WHERE hypothesis_id=?',
@@ -191,7 +193,11 @@ class Runs:
             result = db.execute('SELECT f.data FROM findings_from_runs m JOIN findings f '
                                 'ON f.id=m.finding_id WHERE m.run_id=?', (run_id,)).fetchone()
         if result:
-            row['scientific_outcome'] = json.loads(result['data'])['outcome']
+            finding = json.loads(result['data'])
+            row['scientific_outcome'] = (finding['outcome'] if finding.get('evidence_kind', 'SCIENTIFIC')
+                                         == 'SCIENTIFIC' else None)
+            row['validation_outcome'] = (finding['outcome'] if finding.get('evidence_kind')
+                                         == 'SYSTEM_VALIDATION' else None)
         for field in ('receipt', 'failure'):
             if row[field]:
                 row[field] = json.loads(row[field])
@@ -275,6 +281,7 @@ class Runs:
         if current in {'PREPARING', 'LOST'}:
             self._state(run['id'], 'DISPATCHED', receipt=receipt)
         with self.store.connect() as db:
+            db.execute('UPDATE executions SET receipt=? WHERE id=?', (encoded(receipt), run['id']))
             db.execute('UPDATE run_attempts SET receipt=?,state=? WHERE run_id=? AND attempt=?',
                        (encoded(receipt), result['state'], run['id'], run['attempt']))
 
@@ -478,16 +485,20 @@ class Runs:
                 'falsifies': [spec['hypothesis_id']] if outcome == 'FALSIFIED' else [],
                 'prediction_vs_observation': comparison,
                 'unexpected': any(unexpected) if unexpected else None, 'next_questions': ['Replication or in-scope follow-up'],
+                'evidence_kind': spec.get('evidence_kind', 'SCIENTIFIC'),
                 'verification': 'EXECUTOR_VERIFIED', 'experiment_digest': run['experiment_digest'],
                 'evidence': [dict(a) for a in artifacts]}
         with self.store.connect() as db:
             db.execute('INSERT INTO findings VALUES (?,?,?,?,?)',
                        (finding_id, run['project_id'], run['experiment_id'], encoded(data), utc_stamp()))
             db.execute('INSERT INTO findings_from_runs VALUES (?,?)', (run['id'], finding_id))
-            db.execute('INSERT INTO hypothesis_states VALUES (?,?,?,?) ON CONFLICT(hypothesis_id) '
-                       'DO UPDATE SET state=excluded.state,finding_id=excluded.finding_id,'
-                       'updated_at=excluded.updated_at',
-                       (spec['hypothesis_id'], outcome, finding_id, utc_stamp()))
+            if spec.get('evidence_kind', 'SCIENTIFIC') == 'SCIENTIFIC':
+                db.execute('INSERT INTO hypothesis_states VALUES (?,?,?,?) ON CONFLICT(hypothesis_id) '
+                           'DO UPDATE SET state=excluded.state,finding_id=excluded.finding_id,'
+                           'updated_at=excluded.updated_at',
+                           (spec['hypothesis_id'], outcome, finding_id, utc_stamp()))
+        if spec.get('evidence_kind') == 'SYSTEM_VALIDATION':
+            return
         if outcome == 'INCONCLUSIVE':
             self.policy.decision(run['project_id'], 'NON_DISCRIMINATING_EVIDENCE', {'run_id': run['id']})
         if outcome == 'FALSIFIED':

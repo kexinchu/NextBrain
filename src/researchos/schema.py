@@ -63,3 +63,43 @@ CREATE TRIGGER IF NOT EXISTS immutable_experiment_freeze
 BEFORE UPDATE ON experiment_freezes
 BEGIN SELECT RAISE(ABORT, 'experiment snapshot is immutable'); END;
 """
+
+SCHEMA_V3 = """
+CREATE TABLE IF NOT EXISTS uncertainties (
+ id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id),
+ data TEXT NOT NULL, status TEXT NOT NULL, created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS planner_proposals (
+ id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id),
+ data TEXT NOT NULL, created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS planner_decisions (
+ id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id),
+ state_digest TEXT NOT NULL, data TEXT NOT NULL, created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS research_assessments (
+ id TEXT PRIMARY KEY REFERENCES findings(id), project_id TEXT NOT NULL REFERENCES projects(id),
+ data TEXT NOT NULL, created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS controller_decisions (
+ id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id),
+ data TEXT NOT NULL, created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS maturity_gates (
+ id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id),
+ state_digest TEXT NOT NULL, digest TEXT NOT NULL, data TEXT NOT NULL,
+ action TEXT, approval_id TEXT REFERENCES object_approvals(id), created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS advances (
+ id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id),
+ data TEXT NOT NULL, state TEXT NOT NULL, created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS advance_runs (
+ advance_id TEXT NOT NULL REFERENCES advances(id), run_id TEXT NOT NULL UNIQUE REFERENCES executions(id),
+ decision_id TEXT NOT NULL REFERENCES planner_decisions(id), PRIMARY KEY(advance_id,run_id)
+);
+CREATE TRIGGER IF NOT EXISTS immutable_planner_decision BEFORE UPDATE ON planner_decisions
+BEGIN SELECT RAISE(ABORT, 'planner decision is immutable'); END;
+CREATE TRIGGER IF NOT EXISTS immutable_planner_proposal BEFORE UPDATE ON planner_proposals
+BEGIN SELECT RAISE(ABORT, 'planner proposal is immutable'); END;
+"""

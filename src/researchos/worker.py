@@ -12,6 +12,7 @@ import json
 import os
 import platform
 import signal
+import shutil
 import subprocess
 import sys
 import tarfile
@@ -78,6 +79,11 @@ def inspect(root):
     if state['state'] not in TERMINAL and not alive(state.get('supervisor_pid'), root / 'request.json'):
         if state.get('state') == 'DISPATCHED' and time.time() - state['updated_at'] < 10:
             return {**state, 'receipt': receipt, 'confirmed_dead': False}
+        # It may have completed between reading state and checking the process lock.
+        latest = read(state_path)
+        if latest['state'] in TERMINAL:
+            return {**latest, 'receipt': read(receipt_path) if receipt_path.exists() else receipt,
+                    'confirmed_dead': True}
         # A dead supervisor may have orphaned a child. Never retry this ambiguous state.
         return {**state, 'state': 'LOST', 'receipt': receipt, 'confirmed_dead': False,
                 'failure_type': 'SUPERVISOR_LOST'}
@@ -204,20 +210,23 @@ def supervise(request_path):
         write(root / 'environment.json', {'python': sys.version, 'platform': platform.platform(),
                                          'hostname': platform.node(), 'pid': os.getpid(),
                                          'gpu_indices': request['gpu_indices']})
+        if shutil.disk_usage(root).free < spec['budget']['disk_bytes']:
+            raise ValueError('insufficient free disk for frozen run allowance')
         extract_code(root, request)
         required = spec['environment_requirement'].get('python_min', '3.10')
         if sys.version_info[:2] < tuple(int(n) for n in required.split('.')[:2]):
             raise ValueError('Python runtime does not meet requirement')
         if request['gpu_indices']:
-            gpu = subprocess.run(['nvidia-smi', '--query-gpu=index,memory.total,utilization.gpu,memory.used',
+            gpu = subprocess.run(['nvidia-smi', '--query-gpu=index,memory.total,utilization.gpu,memory.used,memory.free',
                                   '--format=csv,noheader,nounits'], capture_output=True, text=True, timeout=5)
             if gpu.returncode:
                 raise ValueError('GPU inventory unavailable at dispatch')
             (root / 'gpu.csv').write_text(gpu.stdout)
             available = {}
             for line in gpu.stdout.splitlines():
-                index, memory = line.split(',')[:2]
-                available[int(index)] = float(memory) / 1024
+                fields = line.split(',')
+                index, memory = fields[:2]
+                available[int(index)] = min(float(memory), float(fields[4])) / 1024
             required_memory = spec['resource_requirement'].get('min_vram_gb', 0)
             if any(available.get(index, -1) < required_memory for index in request['gpu_indices']):
                 raise ValueError('selected GPU no longer meets frozen requirements')

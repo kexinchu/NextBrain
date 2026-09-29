@@ -63,7 +63,7 @@ def import_config(store: Store, path: Path) -> list[dict]:
 # Fixed inventory only; no model-supplied shell snippets or installation commands.
 INVENTORY = r'''
 printf '__ROS_HOSTNAME__\n'; hostname
-printf '__ROS_GPU__\n'; nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader,nounits 2>/dev/null || true
+printf '__ROS_GPU__\n'; nvidia-smi --query-gpu=name,memory.total,driver_version,memory.free --format=csv,noheader,nounits 2>/dev/null || true
 printf '__ROS_CUDA__\n'; nvidia-smi 2>/dev/null | head -4; nvcc --version 2>/dev/null | tail -1
 printf '__ROS_PYTHON__\n'; python3 --version 2>&1
 printf '__ROS_DISK__\n'; df -Pk .
@@ -103,6 +103,15 @@ def probe(store: Store, alias: str) -> dict:
             data['status'] = 'INCOMPLETE'
     except (subprocess.TimeoutExpired, OSError) as exc:
         data = {'status': 'UNREACHABLE', 'error': str(exc), 'inventory': {}}
+    if data['status'] == 'OK':
+        disk = data['inventory'].get('disk', '').splitlines()
+        try:
+            available = int(disk[-1].split()[3]) * 1024
+            data['available_disk_bytes'] = available
+            if available < 1024 ** 3:
+                data.update(status='UNAVAILABLE', reason='Less than 1 GiB free disk; no automatic cleanup')
+        except (ValueError, IndexError):
+            data.update(status='INCOMPLETE', reason='Disk availability could not be verified')
     record = {'id': uid('PROBE'), 'machine_id': alias, 'data': encoded(data), 'created_at': utc_stamp()}
     with store.connect() as db:
         db.execute('INSERT INTO probes VALUES (?,?,?,?)', tuple(record.values()))

@@ -226,7 +226,8 @@ def test_ssh_import_never_executes_and_probe_is_explicit(tmp_path, monkeypatch):
         assert 'ProxyCommand=none' in argv
         assert kwargs['timeout'] == 30
         return subprocess.CompletedProcess(argv, 0,
-             '__ROS_HOSTNAME__\nfixture\n__ROS_GPU__\nNVIDIA RTX A6000, 49140, 555\n', '')
+             '__ROS_HOSTNAME__\nfixture\n__ROS_GPU__\nNVIDIA RTX A6000, 49140, 555\n'
+             '__ROS_DISK__\nFilesystem 1024-blocks Used Available Capacity Mounted on\n/dev/mock 9000000 1000000 8000000 11% /\n', '')
     monkeypatch.setattr(subprocess, 'run', success)
     assert probe(app.store, 'gpu-a')['data']['status'] == 'OK'
     assert 'A6000' in json.loads(app.store.get('machines', 'gpu-a')['data'])['inventory']['gpu']
